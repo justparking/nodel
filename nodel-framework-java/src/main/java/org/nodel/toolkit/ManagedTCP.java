@@ -236,6 +236,16 @@ public class ManagedTCP implements Closeable {
     private int _longTermRequestTimeout = 60000;
     
     /**
+     * (see setter)
+     */
+    private int _minSendGap;
+    
+    /**
+     * When 'minSendGap' in use, the last successful send
+     */
+    private long _lastSend = System.nanoTime();
+    
+    /**
      * The last time a successful connection occurred (connection or data receive)
      * (nano time)
      */
@@ -454,6 +464,20 @@ public class ManagedTCP implements Closeable {
      */
     public void setRequestTimeout(int value) {
         _requestTimeout = value;
+    }
+    
+    /**
+     * The minimum gap between sends (ms)
+     */
+    public void setMinSendGap(int value) {
+        _minSendGap = value;
+    }
+    
+    /**
+     * The minimum gap between sends
+     */
+    public int getMinSendGap() {
+        return _minSendGap;
     }
     
     /**
@@ -1240,6 +1264,8 @@ public class ManagedTCP implements Closeable {
     private void sendBufferNow0(OutputStream os, byte[] buffer, String origData) {
         try {
             os.write(buffer);
+            
+            _lastSend = System.nanoTime();
         } catch (Exception exc) {
             // ignore
         }
