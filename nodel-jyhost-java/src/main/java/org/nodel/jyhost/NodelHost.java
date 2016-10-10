@@ -22,15 +22,23 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.nodel.Handler;
 import org.nodel.SimpleName;
 import org.nodel.Strings;
+import org.nodel.core.ActionRequestHandler;
 import org.nodel.core.Nodel;
 import org.nodel.core.NodelClients.NodeURL;
+import org.nodel.core.NodelServerAction;
+import org.nodel.core.NodelServerEvent;
 import org.nodel.diagnostics.AtomicLongMeasurementProvider;
 import org.nodel.diagnostics.Diagnostics;
 import org.nodel.discovery.AdvertisementInfo;
+import org.nodel.host.Binding;
+import org.nodel.host.NodelHostNode;
+import org.nodel.reflection.Schema;
 import org.nodel.reflection.Serialisation;
+import org.nodel.reflection.Value;
 import org.nodel.threading.ThreadPool;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
+import org.nodel.toolkit.Console;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,9 +70,9 @@ public class NodelHost {
     }
 
     /**
-     * (logging related)
+     * (init. in 'nodel init')
      */
-    protected Logger _logger = LoggerFactory.getLogger(this.getClass().getName() + "_" + s_instanceCounter.getAndIncrement());
+    private Console.Interface _console;        
     
     /**
      * (threading)
@@ -92,10 +100,18 @@ public class NodelHost {
      */
     private File _root;
     
+
+    public static class RootInfo {
+    	
+    	@Value(name="root", title="Root")
+    	public String root;
+    }
+    
     /**
      * Additional roots (see 'root')
-     */
-    private List<File> _otherRoots = new ArrayList<File>();
+     */    
+    public NodelServerEvent<RootInfo[]> otherRootsEvent  = new NodelServerEvent<RootInfo[]>(NodelHostNode.instance().getName(), new SimpleName("OtherRoots"), 
+    		new Binding("Other Roots", null, "Hosting", null, 0, Schema.getSchemaObject(RootInfo[].class))); 
     
     /**
      * Reflects the current running node configuration.
@@ -131,12 +147,8 @@ public class NodelHost {
         else
             _root = root;
         
-        _logger.info("NodelHost initialised. root='{}'", root.getAbsolutePath());
-        
         Nodel.setHostPath(new File(".").getAbsolutePath());
         Nodel.setNodesRoot(_root.getAbsolutePath());
-        
-        setHostingFilters(inclFilters, exclFilters);
         
         // attach to some error handlers
         Nodel.attachNameRegistrationFaultHandler(new Handler.H2<SimpleName, Exception>() {
@@ -147,6 +159,21 @@ public class NodelHost {
             }
             
         });
+        
+        exposeToNodelHostNode();
+        
+        _console.info("NodelHost initialised. root='" + root.getAbsolutePath() + "'");
+        
+        if (this.hostingFiltersEvent.getArg() == null) {
+            List<HostingFiltersInfo> filters = new ArrayList<HostingFiltersInfo>();
+            if (inclFilters != null)
+                for (String filter : inclFilters)
+                    filters.add(new HostingFiltersInfo(FilterType.Incl, filter));
+            if (exclFilters != null)
+                for (String filter : exclFilters)
+                    filters.add(new HostingFiltersInfo(FilterType.Excl, filter));
+            setHostingFilters(filters);
+        }
         
         // schedule a maintenance run immediately
         _threadPool.execute(new Runnable() {
@@ -161,48 +188,68 @@ public class NodelHost {
         s_instance = this;
     } // (constructor)
     
-    /**
-     * Sets other (secondary) roots
-     */
-    public void setOtherRoots(List<String> roots) {
-        List<File> fileRoots = new ArrayList<File>();
-        for (String root : roots)
-            fileRoots.add(new File(root));
+
+    public NodelServerAction<RootInfo[]> otherRootsAction = new NodelServerAction<RootInfo[]>(
+                                                                     NodelHostNode.instance().getName(), 
+                                                                     new SimpleName("OtherRoots"), 
+                                                                     new Binding("Other Roots", null, "Hosting", null, 0, Schema.getSchemaObject(RootInfo[].class)));
+
+    public enum FilterType {
+        Excl, Incl
+    }
+
+    public static class HostingFiltersInfo {
+        @Value(name = "type", title = "Type", order = 1)
+        public FilterType type;
         
-        _otherRoots = fileRoots;
+        @Value(name = "filter", title = "Filter", order = 2)
+        public String filter;
+        
+        public HostingFiltersInfo() {}
+        
+        public HostingFiltersInfo(FilterType type, String filter) {
+            this.type = type;
+            this.filter = filter;
+        }
     }
     
-    /**
-     * (see setter)
-     */
-    public List<File> getOtherRoots() {
-        return _otherRoots;
-    }
+    public NodelServerEvent<List<HostingFiltersInfo>> hostingFiltersEvent  = new NodelServerEvent<List<HostingFiltersInfo>>(
+            NodelHostNode.instance().getName(), 
+            new SimpleName("HostingFilters"), 
+            new Binding("Hosting Filters", null, "Hosting", null, 0, Schema.getSchemaObject(HostingFiltersInfo[].class)));
+    
+    public NodelServerAction<List<HostingFiltersInfo>> hostingFiltersAction  = new NodelServerAction<List<HostingFiltersInfo>>(
+            NodelHostNode.instance().getName(), 
+            new SimpleName("HostingFilters"), 
+            new Binding("Hosting Filters", null, "Hosting", null, 0, Schema.getSchemaObject(HostingFiltersInfo[].class)));
 
     /**
      * Used to adjust filters on-the-fly.
      */
-    public void setHostingFilters(String[] inclFilters, String[] exclFilters) {
-        _origInclFilters = inclFilters;
-        _origExclFilters = exclFilters;
+    private void setHostingFilters(List<HostingFiltersInfo> filters) {
+        List<String> inclFilters = new ArrayList<String>();
+        List<String> exclFilters = new ArrayList<String>();
+        for (HostingFiltersInfo info : filters)
+            if (info.type == FilterType.Incl)
+                inclFilters.add(info.filter);
+            else if (info.type == FilterType.Excl)
+                exclFilters.add(info.filter);
+        
+        _origInclFilters = inclFilters.toArray(new String[inclFilters.size()]);
+        _origExclFilters = exclFilters.toArray(new String[exclFilters.size()]);
         
         StringBuilder hostingRule = new StringBuilder();
         hostingRule.append("Include ")
-                   .append(inclFilters == null || inclFilters.length == 0 ? "everything" : Serialisation.serialise(inclFilters))
+                   .append(inclFilters == null || inclFilters.size() == 0 ? "everything" : Serialisation.serialise(inclFilters))
                    .append(", exclude ")
-                   .append(exclFilters == null || exclFilters.length == 0 ? "nothing" : Serialisation.serialise(exclFilters));
+                   .append(exclFilters == null || exclFilters.size() == 0 ? "nothing" : Serialisation.serialise(exclFilters));
         Nodel.setHostingRule(hostingRule.toString());
         
         // 'compile' the tokens list
         _inclTokensFilters = intoTokensList(inclFilters);
         _exclTokensFilters = intoTokensList(exclFilters);
-    }
-    
-    /**
-     * Returns the current hosting filters.
-     */
-    public String[][] getHostingFilters() {
-        return new String[][] { _origInclFilters, _origExclFilters };
+
+        this.hostingFiltersEvent.emit(filters);
     }
     
     /**
@@ -239,8 +286,8 @@ public class NodelHost {
         Map<SimpleName, File> currentFolders = new HashMap<SimpleName, File>();
         
         checkRoot(currentFolders, _root);
-        for (File root : _otherRoots)
-            checkRoot(currentFolders, root);
+        for (RootInfo root : this.otherRootsEvent.getArg())
+            checkRoot(currentFolders, new File(root.root));
 
         synchronized (_signal) {
             // find all those that are not in current node map
@@ -265,7 +312,7 @@ public class NodelHost {
             for (SimpleName name : deletedNodes) {
                 PyNode node = _nodeMap.get(name);
                 
-                _logger.info("Stopping and removing node '{}'", name);
+                _console.info("Stopping and removing node '" + name + "'");
                 node.close();
                 
                 // count the removed node
@@ -276,7 +323,7 @@ public class NodelHost {
             
             // start all the new nodes
             for (Entry<SimpleName, File> entry : newFolders.entrySet()) {
-                _logger.info("Spinning up node " + entry.getKey() + "...");
+                _console.info("Spinning up node " + entry.getKey() + "...");
                 
                 try {
                     PyNode node = new PyNode(entry.getValue());
@@ -288,7 +335,7 @@ public class NodelHost {
                     _nodeMap.put(entry.getKey(), node);
                     
                 } catch (Exception exc) {
-                    _logger.warn("Node creation failed; ignoring." + exc);
+                    _console.warn("Node creation failed; ignoring." + exc);
                 }
             } // (for)
         }
@@ -424,11 +471,16 @@ public class NodelHost {
         return Nodel.getNodeURLs(filter);
     }
     
+    public NodelServerAction<?> shutdownAction = new NodelServerAction<Object>(
+            NodelHostNode.instance().getName(), 
+            new SimpleName("Shutdown"), 
+            new Binding("Shutdown", null, "Hosting", "Are you sure you want shutdown?", 0, null));
+    
     /**
      * Permanently shuts down this nodel host
      */
     public void shutdown() {
-        _logger.info("Shutdown called.");
+        _console.info("Shutdown called.");
         
         _closed = true;
         
@@ -442,19 +494,73 @@ public class NodelHost {
         }
         
         Nodel.shutdown();
+        
+        try {
+            System.in.close();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
     }
+    
+    /**
+     * Exposes to the built-in Nodel Host Node
+     */
+	private void exposeToNodelHostNode() {
+	    _console = NodelHostNode.instance().console;
+	    
+	    NodelHostNode.instance().injectLocalAction(shutdownAction);
+	    shutdownAction.registerAction(new ActionRequestHandler() {
+            
+            @Override
+            public void handleActionRequest(Object arg) {
+                shutdown();
+            }
+            
+        });
+	    
+		NodelHostNode.instance().injectLocalEvent(this.otherRootsEvent);
+		if (this.otherRootsEvent.getArg() == null)
+		    this.otherRootsEvent.emit(new RootInfo[] {});
+		else
+		    this.otherRootsEvent.emit((RootInfo[]) Serialisation.coerce(RootInfo[].class, this.otherRootsEvent.getArg()));
+		
+		this.otherRootsAction.registerAction(new ActionRequestHandler() {
+			
+			@Override
+			public void handleActionRequest(Object arg) {
+			    otherRootsEvent.emit((RootInfo[]) Serialisation.coerce(RootInfo[].class, arg));
+			}
+			
+		});
+		NodelHostNode.instance().injectLocalAction(this.otherRootsAction);
+		
+		NodelHostNode.instance().injectLocalEvent(this.hostingFiltersEvent);
+		this.hostingFiltersAction.registerAction(new ActionRequestHandler() {
+            
+            @SuppressWarnings("unchecked")
+            @Override
+            public void handleActionRequest(Object arg) {
+                setHostingFilters((List<HostingFiltersInfo>)Serialisation.coerce(List.class, arg, HostingFiltersInfo.class, null));
+            }
+            
+        });
+		NodelHostNode.instance().injectLocalAction(this.hostingFiltersAction);
+		
+		if (this.hostingFiltersEvent.getArg() != null)
+		    this.hostingFiltersAction.call(this.hostingFiltersEvent.getArg());
+	}
     
     /**
      * Converts a list of simple filters into tokens that are used more efficiently later when matching.
      */
-    private static List<String[]> intoTokensList(String[] filters) {
+    private static List<String[]> intoTokensList(List<String> filters) {
         if (filters == null)
             return Collections.emptyList();
 
         List<String[]> list = new ArrayList<String[]>();
 
-        for (int a = 0; a < filters.length; a++) {
-            String filter = filters[a];
+        for (String filter : filters) {
             if (Strings.isNullOrEmpty(filter))
                 continue;
 

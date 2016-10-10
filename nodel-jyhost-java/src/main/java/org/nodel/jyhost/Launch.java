@@ -501,8 +501,9 @@ public class Launch {
      * Permanently shuts down the nodel host
      */
     public void shutdown() {
-        if (_nodelHost != null)
+        if (_nodelHost != null) {
             _nodelHost.shutdown();
+        }
     }
     
     /**

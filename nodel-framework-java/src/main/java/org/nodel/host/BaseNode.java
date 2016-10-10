@@ -192,13 +192,20 @@ public abstract class BaseNode implements Closeable {
     /**
      * Stores the internal config, NOT live bindings.
      */
-    protected NodeConfig _config = new NodeConfig();    
+    protected NodeConfig _config = new NodeConfig();
+    
+    /**
+     * (assumes file name as node name)
+     */
+    public BaseNode(File root) throws IOException {
+        this(root.getCanonicalFile().getName(), root);
+    }
     
     /**
      * Base constructor for a dynamic node.
      */
-    public BaseNode(File root) throws IOException {
-        init(root.getCanonicalFile().getName());
+    public BaseNode(String name, File root) throws IOException {
+        init(name);
         
         _root = root;
         _metaRoot = new File(_root, ".nodel");

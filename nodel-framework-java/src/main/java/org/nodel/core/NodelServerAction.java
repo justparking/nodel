@@ -19,7 +19,7 @@ import org.nodel.reflection.Param;
 import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
 
-public class NodelServerAction implements Closeable {
+public class NodelServerAction<T> implements Closeable {
     
     protected SimpleName _node;
 
@@ -183,8 +183,8 @@ public class NodelServerAction implements Closeable {
     }
     
     @Value(name = "arg", title = "Argument value")
-    public Object getArg() {
-        return _argValue.get();
+    public T getArg() {
+        return (T) _argValue.get();
     }    
     
     /**
@@ -221,7 +221,7 @@ public class NodelServerAction implements Closeable {
     }
 
     @Service(name = "call", title = "Call", desc = "Invokes this action.")
-    public void call(@Param(name = "arg", title = "Argument") Object arg) {
+    public void call(@Param(name = "arg", title = "Argument") T arg) {
         if (_handler != null)
             _handler.handleActionRequest(arg);
     }

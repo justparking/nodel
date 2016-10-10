@@ -22,6 +22,7 @@ import org.nodel.Strings;
 import org.nodel.core.NodelClients.NodeURL;
 import org.nodel.discovery.AdvertisementInfo;
 import org.nodel.discovery.AutoDNS;
+import org.nodel.host.BaseNode;
 import org.nodel.io.UnexpectedIOException;
 
 // TODO: use one of these to implement character normalisation:
@@ -375,6 +376,10 @@ public class Nodel {
     public static void shutdown() {
         NodelServers.instance().shutdown();
         NodelClients.instance().shutdown();
+        
+        for (BaseNode node : BaseNode.getNodes().values()) {
+            node.close();
+        }
     }
     
     /**

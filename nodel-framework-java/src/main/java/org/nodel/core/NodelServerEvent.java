@@ -26,7 +26,7 @@ import org.nodel.threading.ThreadPool;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 
-public class NodelServerEvent implements Closeable {
+public class NodelServerEvent<T> implements Closeable {
     
     /**
      * (background timers)
@@ -246,9 +246,10 @@ public class NodelServerEvent implements Closeable {
     /**
      * Returns the current value of the event.
      */
-    @Value(name = "arg", title = "Argument value")
-    public Object getArg() {
-        return _argInstance.get().arg;
+    @SuppressWarnings("unchecked")
+	@Value(name = "arg", title = "Argument value")
+    public T getArg() {
+        return (T) _argInstance.get().arg;
     }
 
     @Value(name = "seq", title = "Sequence number")
@@ -279,7 +280,7 @@ public class NodelServerEvent implements Closeable {
     /**
      * Only emits the event if new argument (state) is different from the previous one.
      */
-    public void emitIfDifferent(Object arg) {
+    public void emitIfDifferent(T arg) {
         ArgInstance previous = _argInstance.get();
 
         if (!Objects.sameValue(previous.arg, arg))
@@ -290,7 +291,7 @@ public class NodelServerEvent implements Closeable {
      * Fires the event (with argument)
      */
     @Service(name = "emit", title = "Emit", desc = "Emits this event.")    
-    public void emit(@Param(name="arg", title="Argument") Object arg) {
+    public void emit(@Param(name="arg", title="Argument") T arg) {
         doEmit(arg);
     }
     
