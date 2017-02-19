@@ -2,7 +2,7 @@ package org.nodel.discovery;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
-import java.net.Inet6Address;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.NetworkInterface;
@@ -61,26 +61,51 @@ public class PersistentBinder {
      * (synchronized)
      */
     private MulticastSocket _socket;
+    
+    /**
+     * (callbacks)
+     */
+    private Handler.H2<PersistentBinder, DatagramPacket> _packetHandler;
 
     /**
-     * (completely non-blocking)
+     * Adds a callback for topology changes (order is "new interfaces", "old interfaces")
+     */
+    public PersistentBinder setPacketHandler(Handler.H2<PersistentBinder, DatagramPacket> handler) {
+        _packetHandler = handler;
+        return this;
+    }
+
+    /**
+     * After construction, attach callbacks and then start().
      */
     public PersistentBinder(NetworkInterface intf) {
         _logger = LoggerFactory.getLogger(PersistentBinder.class.getName() + "." + intf.getName());
         
         _intf = intf;
-        
-        // kick off init and receive thread
-        _mainThread = new Thread(new Runnable() {
+    }
 
-            @Override
-            public void run() {
-                threadMain();
-            }
-            
-        }, "InterfaceBinding_" + intf.getName());
-        
-        _mainThread.start();
+    /**
+     * Called after callbacks attached.
+     */
+    public PersistentBinder start() {
+        synchronized (_lock) {
+            if (_shutdown)
+                throw new IllegalStateException("Already started.");
+
+            // init and receive thread
+            _mainThread = new Thread(new Runnable() {
+
+                @Override
+                public void run() {
+                    threadMain();
+                }
+
+            }, "InterfaceBinding_" + _intf.getName());
+
+            _mainThread.start();
+
+            return this;
+        }
     }
 
     /**
@@ -99,7 +124,7 @@ public class PersistentBinder {
                 }
 
                 listen(socket);
-                
+
             } catch (Exception exc) {
                 // cleanup always
                 Stream.safeClose(socket);
@@ -107,94 +132,127 @@ public class PersistentBinder {
                 if (_shutdown)
                     break;
 
-                _logger.warn("{}; will back off for 30s.", exc.getMessage(), exc);
+                _logger.warn("\"" + exc.getMessage() + "\"; will back off for 30s.", exc);
 
                 Threads.safeWait(_lock, 30000);
             }
         } // while
-        
-        _logger.info("(thread run to completion)");
+
+        _logger.info("Binder is shutdown (main thread run to completion)");
     }
-    
+
     private MulticastSocket init() {
         MulticastSocket socket = null;
-        
+
         try {
-            int port = Discovery.MDNS_PORT;
-            socket = new MulticastSocket(port);
-            
+            socket = new MulticastSocket(Discovery.MDNS_PORT);
+
+            // "binds" to a specific interface
+            // (this is done deliberately instead of with constructor because of issues with OSX. See code history.)
             socket.setNetworkInterface(_intf);
-            
-            boolean hasIPv6 = false;
-            
-            StringBuilder addressesText = new StringBuilder();
-            
-            for (InetAddress address : Collections.list(_intf.getInetAddresses())) {
-                if (address instanceof Inet6Address)
-                    hasIPv6 = true;
-                
-                if (addressesText.length() > 0)
-                    addressesText.append(",");
-                
-                addressesText.append(address.getHostAddress());
-            }
 
             // will definitely have IPv4
             socket.joinGroup(Discovery._group);
-            
-            // do IPv6 too if addr present
-            if (hasIPv6)
-                socket.joinGroup(Discovery._group_v6);
 
-            if (hasIPv6)
-                _logger.info("Multicast socket created. port:{} addresses:[{}] groups:[{},{}]", port, addressesText, Discovery.MDNS_GROUP, Discovery.MDNS_GROUP_IPV6);
-            else
-                _logger.info("Multicast socket created. port:{} addresses:[{}] group:{}", port, addressesText, Discovery.MDNS_GROUP);
-            
+            _logger.info("Multicast socket created. address:{} port:{} group:{}", getIPv4Addresses(_intf), Discovery.MDNS_PORT, Discovery.MDNS_GROUP);
+
             return socket;
-            
+
         } catch (Exception exc) {
             // cleanup always
             Stream.safeClose(socket);
-            
+
             throw new RuntimeException("Problem setting up multicast socket", exc);
-        }        
-    }
-    
-    private void listen(MulticastSocket socket) throws IOException {
-        DatagramPacket packet = new DatagramPacket(new byte[10240], 10240);
-        
-        while (!_shutdown) {
-            packet.setLength(10240);
-            socket.receive(packet);
-            
-            System.out.println("Got packet. from:" + packet.getSocketAddress() + ", data:[" + new String(packet.getData(), 0, packet.getLength()) + "]");
         }
     }
 
+    private void listen(MulticastSocket socket) throws IOException {
+        DatagramPacket packet = UDPPacketRecycleQueue.instance().getReadyToUsePacket();
+
+        try {
+            while (!_shutdown) {
+                packet.setLength(packet.getData().length);
+
+                socket.receive(packet);
+
+                // offload immediately to maximize port availability
+                Handler.handle(_packetHandler, this, packet);
+
+                if (_logger.isDebugEnabled())
+                    _logger.debug("Got packet. from:{} data:[{}]", packet.getSocketAddress(), new String(packet.getData(), 0, packet.getLength()));
+
+            } // (while)
+            
+        } finally {
+            UDPPacketRecycleQueue.instance().returnPacket(packet);
+        }
+    }
+
+    /**
+     * Permanently shuts down this binder.
+     */
     public void shutdown() {
+        synchronized(_lock) {
+            _shutdown = true;
+
+            _threadPool.execute(new Runnable() {
+
+                @Override
+                public void run() {
+                    Stream.safeClose(_socket);
+                }
+            });
+        }
     }
 
     public static void main(String[] args) throws IOException  {
         final Map<NetworkInterface, PersistentBinder> intfs = new HashMap<NetworkInterface, PersistentBinder>();
         
-        TopologyMonitor.instance().addOnChangeHandler(new Handler.H2<List<NetworkInterface>, List<NetworkInterface>>() {
+        TopologyMonitor top = new TopologyMonitor();
+        top.setOnChangeHandler(new Handler.H2<List<NetworkInterface>, List<NetworkInterface>>() {
             
             @Override
             public void handle(List<NetworkInterface> newly, List<NetworkInterface> gone) {
                 System.out.println("NEW:" + newly);
                 System.out.println("GONE:" + gone);
 
-                for(NetworkInterface intf: newly)
-                    intfs.put(intf, new PersistentBinder(intf));
-                
-                for(NetworkInterface intf: gone)
+                for (NetworkInterface intf : newly) {
+                    intfs.put(intf, new PersistentBinder(intf).setPacketHandler(new Handler.H2<PersistentBinder, DatagramPacket>() {
+
+                        @Override
+                        public void handle(PersistentBinder binder, DatagramPacket value) {
+                            System.out.println("Got packet:" + value);
+                        }
+
+                    }).start());
+                }
+
+                for (NetworkInterface intf : gone)
                     intfs.remove(intf).shutdown();
             }
-            
+
         });
-        
+        top.start();
+
         System.in.read();
+    }
+    
+    /**
+     * (convenience function)
+     */
+    private static StringBuilder getIPv4Addresses(NetworkInterface intf) {
+        // for information purposes
+        StringBuilder addressesText = new StringBuilder();
+        for (InetAddress address : Collections.list(intf.getInetAddresses())) {
+            if (!(address instanceof Inet4Address))
+                continue;
+
+            if (addressesText.length() > 0)
+                addressesText.append(",");
+
+            addressesText.append(address.getHostAddress());
+        }
+        return addressesText;
     }
     
 }

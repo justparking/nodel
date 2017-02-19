@@ -49,21 +49,6 @@ import org.slf4j.LoggerFactory;
 public class NodelAutoDNS extends AutoDNS {
     
     /**
-     * IPv4 multicast group
-     */
-    public static final String MDNS_GROUP = "224.0.0.252";
-
-    /**
-     * IPv6 multicast group (not used here but reserved)
-     */
-    public static final String MDNS_GROUP_IPV6 = "FF02::FB";
-    
-    /**
-     * Multicast port
-     */
-    public static final int MDNS_PORT = 5354;
-    
-    /**
      * The period between probes when actively probing.
      * (millis)
      */

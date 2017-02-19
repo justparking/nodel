@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.nodel.Handler;
-import org.nodel.Handlers;
 import org.nodel.threading.ThreadPool;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
@@ -41,34 +40,55 @@ public class TopologyMonitor {
     private Timers _timerThread = Discovery.timerThread();
     
     /**
+     * (for synchronization)
+     */
+    private Object _lock = new Object();
+
+    /**
+     * (synchronized)
+     */
+    private TimerTask _mainTimer;
+
+    /**
      * The last active ones.
      */
     private Set<NetworkInterface> _lastActiveSet = new HashSet<NetworkInterface>();
-    
+
     /**
      * (callbacks)
      */
-    private Handlers.H2<List<NetworkInterface>, List<NetworkInterface>> _onChangeHandlers = new Handlers.H2<>();
-    
+    private Handler.H2<List<NetworkInterface>, List<NetworkInterface>> _onChangeHandler;
+
     /**
      * Adds a callback for topology changes (order is "new interfaces", "old interfaces")
      */
-    public void addOnChangeHandler(Handler.H2<List<NetworkInterface>, List<NetworkInterface>> handler) {
-        _onChangeHandlers.addHandler(handler);
+    public void setOnChangeHandler(Handler.H2<List<NetworkInterface>, List<NetworkInterface>> handler) {
+        _onChangeHandler = handler;
     }
 
     /**
      * (see related 'add__Handler')
      */
     public void removeOnChangeHandler(Handler.H2<List<NetworkInterface>, List<NetworkInterface>> handler) {
-        _onChangeHandlers.removeHandler(handler);
+        _onChangeHandler = null;
     }
 
     /**
-     * (private constructor)
+     * After construction, use 'add___Handler()' and then start().
      */
-    private TopologyMonitor() {
-        kickOffTimer();
+    public TopologyMonitor() {
+    }
+    
+    /**
+     * Starts this topology monitor permanently.
+     */
+    public void start() {
+        synchronized(_lock) {
+            if (_mainTimer != null)
+                throw new IllegalStateException("Already started");
+            
+            kickOffTimer();
+        }
     }
     
     /**
@@ -76,27 +96,29 @@ public class TopologyMonitor {
      * fresh system boot-up sequence where interfaces may take some time to settle.
      */
     private void kickOffTimer() {
-        _timerThread.schedule(_threadPool, new TimerTask() {
+        synchronized (_lock) {
+            _mainTimer = _timerThread.schedule(_threadPool, new TimerTask() {
 
-            @Override
-            public void run() {
-                monitorInterfaces();
+                @Override
+                public void run() {
+                    tryMonitorInterfaces();
 
-                // then after a minute...
-                _timerThread.schedule(_threadPool, new TimerTask() {
+                    // then after a minute...
+                    _timerThread.schedule(_threadPool, new TimerTask() {
 
-                    @Override
-                    public void run() {
-                        monitorInterfaces();
+                        @Override
+                        public void run() {
+                            tryMonitorInterfaces();
 
-                        // ...then every 4 minutes
-                        _timerThread.schedule(_threadPool, this, 15000); // TODO: update this
-                    }
+                            // ...then every 4 minutes
+                            _timerThread.schedule(_threadPool, this, 15000); // TODO: revert this
+                        }
 
-                }, 60000);
-            }
+                    }, 15000); // TODO: revert this to 60000
+                }
 
-        }, 2000);
+            }, 2000);
+        }
     }
     
     /**
@@ -135,7 +157,19 @@ public class TopologyMonitor {
             _logger.info("Interfaces gone missing:" + gone);
 
         // notify of changes
-        _onChangeHandlers.updateAll(newly, gone);
+        Handler.handle(_onChangeHandler, newly, gone);
+    }
+    
+    /**
+     * (exceptionless: even though method should be exception, provide this guarantee otherwise timer may fail.)
+     */
+    private void tryMonitorInterfaces() {
+        try {
+            monitorInterfaces();
+            
+        } catch (Exception exc) {
+            _logger.warn("An exception should not occur within method.", exc);
+        }
     }
     
     /**
@@ -156,7 +190,7 @@ public class TopologyMonitor {
                     
                     // check for at least one IPv4 address and check loopback status again for good measure
                     for (InetAddress address : Collections.list(intf.getInetAddresses())) {
-                        if (address instanceof Inet4Address && !address.isLoopbackAddress())
+                        if (address instanceof Inet4Address)
                             valid = true;
                     }
 
@@ -173,20 +207,6 @@ public class TopologyMonitor {
         }
         
         return set;
-    }
-
-    /**
-     * (singleton, thread-safe, non-blocking)
-     */
-    private static class Instance {
-        private static final TopologyMonitor INSTANCE = new TopologyMonitor();
-    }
-
-    /**
-     * Returns the singleton instance of this class.
-     */
-    public static TopologyMonitor instance() {
-        return Instance.INSTANCE;
     }
     
     /**
