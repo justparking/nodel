@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.nodel.Base64;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Value;
 
@@ -23,7 +22,6 @@ public class BootstrapConfig {
 
     static {
         Example = new BootstrapConfig();
-        Example.networkInterface = Base64.decode("Enc3lXyJ");
         Example.inclFilters = new String[] { "Main Campus *", "Campus 2*" };
         Example.exclFilters = new String[] { "Campus 3*" };
         Example.hardLinksAddresses = new String[] { "127.0.0.1", "192.168.1.203" };
@@ -107,16 +105,6 @@ public class BootstrapConfig {
         this.deviceFingerprintOverride = value;
     }
 
-    @Value(name = "networkInterface", title = "Network interface", order = 800, required = false, desc = "(Short command arg '-i')")
-    private byte[] networkInterface = null;
-
-    public byte[] getNetworkInterface() {
-        return this.networkInterface;
-    }
-
-    public void setNetworkInterface(byte[] value) {
-        this.networkInterface = value;
-    }
 
     @Value(name = "disableAdvertisements", title = "Disable advertisements", order = 900, required = false)
     private boolean disableAdvertisements = false;
@@ -227,9 +215,6 @@ public class BootstrapConfig {
 
             } else if ("-r".equals(arg) || "--nodelRoot".equalsIgnoreCase(arg)) {
                 this.nodelRoot = nextArg;
-
-            } else if ("-i".equals(arg) || "--networkInterface".equalsIgnoreCase(arg)) {
-                this.networkInterface = (byte[]) Serialisation.coerce(byte[].class, nextArg);
 
             } else if ("-l".equals(arg) || "--enableProgramLogging".equalsIgnoreCase(arg)) {
                 this.enableProgramLogging = true;

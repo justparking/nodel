@@ -1,5 +1,7 @@
 package org.nodel.discovery;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -22,7 +24,7 @@ import org.slf4j.LoggerFactory;
  * 
  * Starts after a short delay and then periodically (every 4 mins)
  */
-public class TopologyMonitor {
+public class TopologyMonitor implements Closeable {
     
     /**
      * (logging)
@@ -150,16 +152,23 @@ public class TopologyMonitor {
         for (NetworkInterface intf : gone)
             _lastActiveSet.remove(intf);
 
+        boolean hasChanged = false;
+
         // do some logging
-        if (newly.size() > 0)
+        if (newly.size() > 0) {
             _logger.info("New interfaces discovered: " + newly);
-        if (gone.size() > 0)
+            hasChanged = true;
+        }
+        if (gone.size() > 0) {
             _logger.info("Interfaces gone missing:" + gone);
+            hasChanged = true;
+        }
 
         // notify of changes
-        Handler.handle(_onChangeHandler, newly, gone);
+        if (hasChanged)
+            Handler.handle(_onChangeHandler, newly, gone);
     }
-    
+
     /**
      * (exceptionless: even though method should be exception, provide this guarantee otherwise timer may fail.)
      */
@@ -214,6 +223,11 @@ public class TopologyMonitor {
      */
     private void warn(String category, String msg, Exception exc) {
         _logger.warn(msg, exc);
+    }
+
+    @Override
+    public void close() throws IOException {
+        // nothing to do
     }
 
 }

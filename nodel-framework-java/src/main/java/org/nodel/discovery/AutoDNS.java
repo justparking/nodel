@@ -15,6 +15,7 @@ import java.util.Collection;
 import org.nodel.SimpleName;
 import org.nodel.Strings;
 import org.nodel.core.NodeAddress;
+import org.nodel.core.Nodel;
 import org.nodel.reflection.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +41,24 @@ public abstract class AutoDNS implements Closeable {
      * The port to advertise.
      */
     protected int _port = -1;
+    
+    /**
+     * The HTTP address
+     */
+    protected String _httpAddress;
+    
+    /**
+     * The native protocol address
+     */
+    protected String _nodelAddress;
+
+
+    /**
+     * The current priority address
+     * (set on topology changes)
+     */
+    protected String _priorityAddress;
+    
     
     /**
      * Load an implementation (build-in or otherwise) using an optional system property 'org.nodel.discovery.impl':
@@ -96,6 +115,8 @@ public abstract class AutoDNS implements Closeable {
      */
     public void setAdvertisementPort(int value) {
         _port = value;
+        
+        updateAddresses();
     } // (method)
     
     /**
@@ -103,7 +124,16 @@ public abstract class AutoDNS implements Closeable {
      */
     public int getAdvertisementPort() {
         return _port;
-    } // (method)        
+    } // (method)
+    
+    /**
+     * When the addresses need to be updated.
+     */
+    protected void updateAddresses() {
+        _priorityAddress = Discovery.getLikelyPublicAddress().getHostAddress();
+        _httpAddress = "http://" + _priorityAddress + ":" + Nodel.getHTTPPort() + Nodel.getHTTPSuffix();
+        _nodelAddress = "tcp://" + _priorityAddress + ":" + getAdvertisementPort();
+    }
     
     /**
      * Resolves a node into a node address.
