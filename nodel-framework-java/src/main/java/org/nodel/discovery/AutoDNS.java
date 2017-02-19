@@ -131,8 +131,11 @@ public abstract class AutoDNS implements Closeable {
      */
     protected void updateAddresses() {
         _priorityAddress = Discovery.getLikelyPublicAddress().getHostAddress();
+        
         _httpAddress = "http://" + _priorityAddress + ":" + Nodel.getHTTPPort() + Nodel.getHTTPSuffix();
         _nodelAddress = "tcp://" + _priorityAddress + ":" + getAdvertisementPort();
+        
+        Nodel.updateHTTPAddress(_httpAddress);
     }
     
     /**

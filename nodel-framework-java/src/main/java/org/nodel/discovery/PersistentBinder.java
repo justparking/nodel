@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.MulticastSocket;
 import java.net.NetworkInterface;
 import java.util.Collections;
@@ -136,16 +137,25 @@ public class PersistentBinder {
         MulticastSocket socket = null;
 
         try {
-            socket = new MulticastSocket(Discovery.MDNS_PORT);
+            // socket.setNetworkInterface(_intf);
+            InetAddress firstAddr = null;
+            for (InetAddress addr : Collections.list(_intf.getInetAddresses())) {
+                if (addr instanceof Inet4Address) {
+                    firstAddr = addr;
+                    break;
+                }
+            }
+            
+            socket = new MulticastSocket(new InetSocketAddress(firstAddr, Discovery.MDNS_PORT));
 
-            // "binds" to a specific interface
+            // "binds" to a specific interface (by address)
             // (this is done deliberately instead of with constructor because of issues with OSX. See code history.)
-            socket.setNetworkInterface(_intf);
-
+            // socket.setInterface(firstAddr);
+            
             // will definitely have IPv4
             socket.joinGroup(Discovery._group);
 
-            _logger.info("Multicast socket created. address:{} port:{} group:{}", getIPv4Addresses(_intf), Discovery.MDNS_PORT, Discovery.MDNS_GROUP);
+            _logger.info("Multicast socket created. address:{} port:{} group:{}", firstAddr.getHostAddress(), Discovery.MDNS_PORT, Discovery.MDNS_GROUP);
 
             return socket;
 
@@ -158,25 +168,27 @@ public class PersistentBinder {
     }
 
     private void listen(MulticastSocket socket) throws IOException {
-        DatagramPacket packet = UDPPacketRecycleQueue.instance().getReadyToUsePacket();
+        DatagramPacket packet = null;
+        
+        while (!_shutdown) {
+            packet = UDPPacketRecycleQueue.instance().getReadyToUsePacket();
 
-        try {
-            while (!_shutdown) {
-                packet.setLength(packet.getData().length);
-
+            try {
                 socket.receive(packet);
-
-                // offload immediately to maximize port availability
-                Handler.handle(_packetHandler, this, packet);
-
-                if (_logger.isDebugEnabled())
-                    _logger.debug("Got packet. from:{} data:[{}]", packet.getSocketAddress(), new String(packet.getData(), 0, packet.getLength()));
-
-            } // (while)
+                
+            } catch (Exception exc) {
+                UDPPacketRecycleQueue.instance().returnPacket(packet);
+                
+                throw exc;
+            }
             
-        } finally {
-            UDPPacketRecycleQueue.instance().returnPacket(packet);
-        }
+            if (_logger.isDebugEnabled())
+                _logger.debug("Got packet. from:{} data:[{}]", packet.getSocketAddress(), new String(packet.getData(), 0, packet.getLength()));
+
+            // offload immediately to maximize port availability
+            // (it's the handler's responsibility to recycle the packet)
+            Handler.handle(_packetHandler, this, packet);
+        } // (while)
     }
 
     /**
@@ -229,7 +241,7 @@ public class PersistentBinder {
     /**
      * (convenience function)
      */
-    private static StringBuilder getIPv4Addresses(NetworkInterface intf) {
+    private static StringBuilder getIPv4AddressesText(NetworkInterface intf) {
         // for information purposes
         StringBuilder addressesText = new StringBuilder();
         for (InetAddress address : Collections.list(intf.getInetAddresses())) {

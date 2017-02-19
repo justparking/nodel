@@ -634,7 +634,7 @@ public class NodelAutoDNS extends AutoDNS {
                 Discovery.s_unicastOutOps.incrementAndGet();
             }
 
-        } catch (IOException exc) {
+        } catch (Exception exc) {
             if (!_enabled)
                 return;
 

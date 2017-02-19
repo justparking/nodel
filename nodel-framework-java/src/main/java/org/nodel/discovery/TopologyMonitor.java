@@ -146,22 +146,21 @@ public class TopologyMonitor implements Closeable {
                 gone.add(lastActiveIntf);
         }
         
-        // update 'last active' with new and old
-        for (NetworkInterface intf : newly)
-            _lastActiveSet.add(intf);
-        for (NetworkInterface intf : gone)
-            _lastActiveSet.remove(intf);
-
         boolean hasChanged = false;
-
-        // do some logging
-        if (newly.size() > 0) {
-            _logger.info("New interfaces discovered: " + newly);
+        
+        // update 'last active' with new and old
+        for (NetworkInterface intf : newly) {
+            _lastActiveSet.add(intf);
             hasChanged = true;
-        }
-        if (gone.size() > 0) {
-            _logger.info("Interfaces gone missing:" + gone);
+            
+            _logger.info("{}: interface appeared!", intf);
+        } 
+        
+        for (NetworkInterface intf : gone) {
+            _lastActiveSet.remove(intf);
             hasChanged = true;
+            
+            _logger.info("{}: interface disappeared! ", intf);
         }
 
         // notify of changes
