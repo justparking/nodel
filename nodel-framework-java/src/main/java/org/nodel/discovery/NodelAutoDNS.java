@@ -93,12 +93,12 @@ public class NodelAutoDNS extends AutoDNS {
     /**
      * Thread-pool for IO operations.
      */
-    private ThreadPool _threadPool = new ThreadPool("Discovery", 24);
+    private ThreadPool _threadPool = Discovery.threadPool();
     
     /**
      * This class' timer thread.
      */
-    private Timers _timerThread = new Timers("Discovery");    
+    private Timers _timerThread = Discovery.timerThread();    
     
     /**
      * The thread to receive the multicast data.
@@ -1051,9 +1051,6 @@ public class NodelAutoDNS extends AutoDNS {
             _logger.info("An address change has been detected. previous={}, current={}", _nodelAddress, nodelAddress);
 
             _nodelAddress = "tcp://" + localIPv4Address.getHostAddress() + ":" + port;
-            _httpAddress = "http://" + localIPv4Address.getHostAddress() + ":" + Nodel.getHTTPPort() + Nodel.getHTTPSuffix();
-            
-            Nodel.updateHTTPAddress(_httpAddress);
 
             synchronized(_lock) {
                 // recycle receiver which will in turn recycle sender

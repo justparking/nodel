@@ -14,6 +14,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.net.NetworkInterface;
 import java.net.UnknownServiceException;
 import java.util.AbstractMap;
 import java.util.Collection;
@@ -26,10 +27,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.joda.time.DateTime;
 import org.nodel.SimpleName;
 import org.nodel.Strings;
+import org.nodel.core.Nodel;
 import org.nodel.core.NodelClients.NodeURL;
 import org.nodel.diagnostics.Diagnostics;
 import org.nodel.discovery.AdvertisementInfo;
 import org.nodel.discovery.AutoDNS;
+import org.nodel.discovery.Discovery;
+import org.nodel.discovery.TopologyMonitor;
 import org.nodel.host.BaseNode;
 import org.nodel.host.NanoHTTPD;
 import org.nodel.io.Stream;
@@ -44,6 +48,7 @@ import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
 import org.nodel.rest.EndpointNotFoundException;
 import org.nodel.rest.REST;
+import org.nodel.threading.ThreadPool;
 import org.python.core.Py;
 import org.python.core.PyCode;
 import org.python.core.PyException;
@@ -172,6 +177,43 @@ public class NodelHostHTTPD extends NanoHTTPD {
     
     public NodelHostHTTPD(int port, File directory) throws IOException {
         super(port, directory, false);
+
+        // update with actual listening port
+        Nodel.setHTTPPort(getListeningPort());
+        
+        // ... and addresses
+        updateAddresses();
+
+        // and watch for future interface changes
+        TopologyMonitor.shared().addOnChangeHandler(new TopologyMonitor.ChangeHandler() {
+
+            @Override
+            public void handle(List<NetworkInterface> appeared, List<NetworkInterface> disappeared) {
+                // do I/O in the background
+                ThreadPool.background().execute(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        updateAddresses();
+                    }
+
+                });
+            }
+
+        });
+    }
+    
+    /**
+     * When the interfaces topology changes, the public IP address might change too.
+     */
+    private void updateAddresses() {
+        // and the full web-address
+        String publicIP =Discovery.getLikelyPublicAddress().getHostAddress(); 
+        
+        String httpNodeAddress = String.format("http://%s:%s%s/",publicIP , Nodel.getHTTPPort(), Nodel.getHTTPSuffix());
+        String httpAddress = String.format("http://%s:%s", publicIP, Nodel.getHTTPPort());
+        
+        Nodel.updateHTTPAddresses(httpAddress, httpNodeAddress);
     }
     
     /**

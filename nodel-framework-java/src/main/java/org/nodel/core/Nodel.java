@@ -292,15 +292,37 @@ public class Nodel {
     public static void setHTTPPort(int value) {
         httpPort = value;
     }
-    
-    public static String s_httpAddress;
 
-    public static void updateHTTPAddress(String httpAddress) {
+    /**
+     * (see public getter / setter)
+     */
+    private static String s_httpAddress = String.format("http://unset");
+    
+    /**
+     * (see public getter / setter)
+     */
+    private static String s_httpNodeAddress = String.format("http://unset/node");
+
+    /**
+     * Updated by host environment.
+     */
+    public static void updateHTTPAddresses(String httpAddress, String httpNodeAddress) {
         s_httpAddress = httpAddress;
+        s_httpNodeAddress = httpNodeAddress;
     }
     
+    /**
+     * The server's HTTP address for this host environment.
+     */
     public static String getHTTPAddress() {
         return s_httpAddress;
+    }
+    
+    /**
+     * A node's HTTP address for this host environment.
+     */
+    public static String getHTTPNodeAddress() {
+        return s_httpNodeAddress;
     }
     
     /**
