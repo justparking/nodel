@@ -272,7 +272,26 @@ public class Nodel {
         }
         
         return filteredList;
-    }    
+    }
+    
+    /**
+     * (see public getter / setter)
+     */
+    private static String s_tcpAddress = null; // e.g. "tcp://IP_ADDR:PORT"
+
+    /**
+     * The TCP address (native Nodel) for this environment.
+     */
+    public static String getTCPAddress() {
+        return s_tcpAddress;
+    }
+    
+    /**
+     * Sets the TCP address for this environment.
+     */
+    public static void updateTCPAddress(String value) {
+        s_tcpAddress = value;
+    }
     
     /**
      * (see public getter / setter)
@@ -296,12 +315,12 @@ public class Nodel {
     /**
      * (see public getter / setter)
      */
-    private static String s_httpAddress = String.format("http://unset");
+    private static String s_httpAddress = String.format("http://127.0.0.1");
     
     /**
      * (see public getter / setter)
      */
-    private static String s_httpNodeAddress = String.format("http://unset/node");
+    private static String s_httpNodeAddress = String.format("http://127.0.0.1/node");
 
     /**
      * Updated by host environment.

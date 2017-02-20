@@ -27,6 +27,10 @@ public class Discovery {
      */
     public static final int MDNS_PORT = 5354;
     
+    /**
+     * (convenience)
+     */
+    public static InetAddress IPv4Loopback = parseNumericalIPAddress("127.0.0.1");
 
     /**
      * (see public method)
@@ -202,7 +206,7 @@ public class Discovery {
      * (instrumentation)
      */
     private static AtomicLongMeasurementProvider s_unicastInDataMeasurement = new AtomicLongMeasurementProvider(s_unicastInData);
-    
+
     /**
      * Unicast in data.
      */
@@ -264,7 +268,7 @@ public class Discovery {
             // all tests failed, just return the loop-back
         }
 
-        return result != null ? result : Discovery.parseNumericalIPAddress("127.0.0.1");
+        return result != null ? result : Discovery.IPv4Loopback;
     } // (method)    
 
 }

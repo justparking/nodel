@@ -9,15 +9,12 @@ package org.nodel.discovery;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MulticastSocket;
-import java.net.NetworkInterface;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -64,12 +61,6 @@ public class NodelAutoDNS extends AutoDNS {
 	 */
 	private static final int SILENCE_TOLERANCE = 3 * PROBE_PERIOD + 10000;
     
-    /**
-     * Returns '127.0.0.99' as a dummy address, normally when no network services are available.
-     * Using '99' to know what's going on if it happens to come up.
-     */
-    private static InetAddress s_dummyInetAddress = Discovery.parseNumericalIPAddress("127.0.0.99"); 
-
     /**
      * (logging)
      */
@@ -273,16 +264,6 @@ public class NodelAutoDNS extends AutoDNS {
     private static String s_hardLinksSocketlabel = "[unicastHardLinksSenderReceiver]";
     
     /**
-     * (will never be null after being set)
-     */
-    private String _nodelAddress;
-
-    /**
-     * Will be a valid address.
-     */
-    private String _httpAddress = "http://" + getLocalIPv4Address().getHostAddress() + ":" + Nodel.getHTTPPort() + Nodel.getHTTPSuffix();
-    
-    /**
      * Holds a safe list of resolved addresses and ports that should be "directly" multicast to (i.e. using unicast).
      * Can be used if multicasting is unreliable or inconvenient.
      * (is either null or has at least one element)
@@ -341,16 +322,6 @@ public class NodelAutoDNS extends AutoDNS {
             }
 
         }, 60000, 60000));;
-
-        // monitor interface changes after 10s delay, then every 2 mins
-        _timers.add(_timerThread.schedule(new TimerTask() {
-
-            @Override
-            public void run() {
-                handleInterfaceCheck();
-            }
-
-        }, 10000, 120000));
 
         _logger.info("Auto discovery threads and timers started. probePeriod:{}, stalePeriodAllowed:{}",
                 DateTimes.formatShortDuration(PROBE_PERIOD), DateTimes.formatShortDuration(STALE_TIME));
@@ -839,8 +810,8 @@ public class NodelAutoDNS extends AutoDNS {
             } // (while)
             
             message.addresses = new ArrayList<String>();
-            message.addresses.add(_nodelAddress);
-            message.addresses.add(_httpAddress);
+            message.addresses.add(Nodel.getTCPAddress());
+            message.addresses.add(Nodel.getHTTPNodeAddress());
             
             // IO is involved so use thread-pool
             // (and only send if the 'present' list is not empty)
@@ -938,7 +909,7 @@ public class NodelAutoDNS extends AutoDNS {
         if (message.discovery != null) {
             // create a responder if one isn't already active
             
-            if (_nodelAddress == null) {
+            if (Nodel.getTCPAddress() == null) {
                 _logger.info("(will not respond; nodel server port still not available)");
                 
                 return;
@@ -1026,44 +997,6 @@ public class NodelAutoDNS extends AutoDNS {
             _services.put(node, si);
         }
     } // (method)
-    
-    /**
-     * Used to monitor address changes on the the interface.
-     */
-    private void handleInterfaceCheck() {
-        try {
-            int port = super.getAdvertisementPort();
-            if (port < 0) {
-                // can't compose a nodel address yet
-                _logger.info("(nodel server port still not available; will wait.)");
-                
-                return;
-            }
-            
-            InetAddress localIPv4Address = getLocalIPv4Address();
-            String nodelAddress = "tcp://" + localIPv4Address.getHostAddress() + ":" + port;
-
-            if (nodelAddress.equals(_nodelAddress))
-                // nothing to do
-                return;
-
-            // the address has changed so should update advertisements
-            _logger.info("An address change has been detected. previous={}, current={}", _nodelAddress, nodelAddress);
-
-            _nodelAddress = "tcp://" + localIPv4Address.getHostAddress() + ":" + port;
-
-            synchronized(_lock) {
-                // recycle receiver which will in turn recycle sender
-                _recycleReceiver = true;
-                
-                // "signal" thread
-                Stream.safeClose(_receiveSocket);
-            }
-            
-        } catch (Exception exc) {
-            _logger.warn("'handleInterfaceCheck' did not complete cleanly; ignoring for now.", exc);
-        }
-    } // (method)
 
     @Override
     public void unregisterService(SimpleName node) {
@@ -1141,55 +1074,6 @@ public class NodelAutoDNS extends AutoDNS {
      */
     public static NodelAutoDNS instance() {
         return Instance.INSTANCE;
-    }
-    
-    /**
-     * Returns the first "sensible" IPv4 address.
-     */
-    public static InetAddress getLocalIPv4Address() {
-        InetAddress selectedInterface = s_interface;
-        
-        // if an interface is being used and IP addresses don't necessarily match, use this candidate anyway
-        InetAddress candidate = null;
-
-        try {
-            Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces();
-            if (en == null)
-                return s_dummyInetAddress;
-
-            while (en.hasMoreElements()) {
-                NetworkInterface intf = en.nextElement();
-                for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();) {
-                    InetAddress inetAddress = enumIpAddr.nextElement();
-                    if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address) {
-                        
-                        // is an IPv4 address that is not a loopback address
-                        
-                        // if interface binding isn't being used, return the found address
-                        if (selectedInterface == null) {
-                            return inetAddress;
-                        
-                        } else {
-                            // make first one candidate
-                            if (candidate != null)
-                                candidate = inetAddress;
-                            
-                            if (selectedInterface.equals(inetAddress))
-                                return inetAddress;
-                            
-                            // otherwise keep iterating, will return the candidate at the end
-                        }
-                    }
-                }
-            }
-        } catch (IOException exc) {
-            // ignore
-        }
-        
-        if (candidate != null)
-            return candidate;
-        
-        return s_dummyInetAddress;
     }
     
     /**

@@ -92,20 +92,6 @@ public abstract class AutoDNS implements Closeable {
     }
     
     /**
-     * The port to use when advertising.
-     */
-    public void setAdvertisementPort(int value) {
-        _port = value;
-    } // (method)
-    
-    /**
-     * @see setAdvertisementPort()
-     */
-    public int getAdvertisementPort() {
-        return _port;
-    } // (method)        
-    
-    /**
      * Resolves a node into a node address.
      * (non-blocking)
      */

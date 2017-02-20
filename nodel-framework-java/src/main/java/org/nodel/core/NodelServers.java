@@ -1,5 +1,7 @@
 package org.nodel.core;
 
+import java.net.NetworkInterface;
+
 /* 
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,6 +20,8 @@ import org.nodel.Handler;
 import org.nodel.Handlers;
 import org.nodel.SimpleName;
 import org.nodel.discovery.AutoDNS;
+import org.nodel.discovery.Discovery;
+import org.nodel.discovery.TopologyMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -186,16 +190,14 @@ public class NodelServers {
                 
             });
 
-		_channelServerSocket.setStartedHandler(new Handler.H1<Integer>() {
-            
-			@Override
-			public void handle(Integer port) {
-				logger.info("Channel server created. port:{}", port);
-            
-            AutoDNS.instance().setAdvertisementPort(port);
-        }
-        
-		});
+        _channelServerSocket.setStartedHandler(new Handler.H1<Integer>() {
+
+            @Override
+            public void handle(Integer port) {
+                onStarted(port);
+            }
+
+        });
 
 		_channelServerSocket.start();
         
@@ -205,8 +207,28 @@ public class NodelServers {
     } // (method)
     
     /**
-     * Attaches a failure handler. 
-     * (multicast event, delegate must not block)
+     * (started callback)
+     */
+    protected void onStarted(final Integer port) {
+        logger.info("Channel server created. port:{}", port);
+
+        Nodel.updateTCPAddress(String.format("tcp://%s:%s", Discovery.getLikelyPublicAddress(), port));
+
+        // update on topology changes too
+
+        // NOTE: attachment can safely be permanent as Nodel Server never recycles.
+        TopologyMonitor.shared().addOnChangeHandler(new TopologyMonitor.ChangeHandler() {
+
+            @Override
+            public void handle(List<NetworkInterface> appeared, List<NetworkInterface> disappeared) {
+                Nodel.updateTCPAddress(String.format("tcp://%s:%s", Discovery.getLikelyPublicAddress(), port));
+            }
+
+        });
+    }
+
+    /**
+     * Attaches a failure handler. (multicast event, delegate must not block)
      */
     public boolean attachFailureHandler(Handler.H1<Throwable> handler) {
         synchronized (_signal) {
