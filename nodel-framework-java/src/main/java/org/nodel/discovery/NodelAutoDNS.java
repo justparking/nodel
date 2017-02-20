@@ -33,7 +33,6 @@ import org.nodel.SimpleName;
 import org.nodel.Threads;
 import org.nodel.core.NodeAddress;
 import org.nodel.core.Nodel;
-import org.nodel.diagnostics.AtomicLongMeasurementProvider;
 import org.nodel.io.Stream;
 import org.nodel.io.UTF8Charset;
 import org.nodel.reflection.Serialisation;
@@ -47,21 +46,6 @@ import org.slf4j.LoggerFactory;
  * Used for registering / unregistering nodes for discovery / lookup purposes. 
  */
 public class NodelAutoDNS extends AutoDNS {
-    
-    /**
-     * IPv4 multicast group
-     */
-    public static final String MDNS_GROUP = "224.0.0.252";
-
-    /**
-     * IPv6 multicast group (not used here but reserved)
-     */
-    public static final String MDNS_GROUP_IPV6 = "FF02::FB";
-    
-    /**
-     * Multicast port
-     */
-    public static final int MDNS_PORT = 5354;
     
     /**
      * The period between probes when actively probing.
@@ -81,147 +65,10 @@ public class NodelAutoDNS extends AutoDNS {
 	private static final int SILENCE_TOLERANCE = 3 * PROBE_PERIOD + 10000;
     
     /**
-     * (instrumentation)
-     */
-    private static AtomicLong s_multicastOutOps = new AtomicLong();
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLongMeasurementProvider s_multicastOutOpsMeasurement = new AtomicLongMeasurementProvider(s_multicastOutOps);
-    
-    /**
-     * Multicast in operations.
-     */
-    public static AtomicLongMeasurementProvider MulticastOutOpsMeasurement() {
-        return s_multicastOutOpsMeasurement;
-    }    
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLong s_multicastOutData = new AtomicLong();
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLongMeasurementProvider s_multicastOutDataMeasurement = new AtomicLongMeasurementProvider(s_multicastOutData);
-    
-    /**
-     * Multicast out data.
-     */
-    public static AtomicLongMeasurementProvider MulticastOutDataMeasurement() {
-        return s_multicastOutDataMeasurement;
-    }    
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLong s_multicastInOps = new AtomicLong();
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLongMeasurementProvider s_multicastInOpsMeasurement = new AtomicLongMeasurementProvider(s_multicastInOps);
-    
-    /**
-     * Multicast in operations.
-     */
-    public static AtomicLongMeasurementProvider MulticastInOpsMeasurement() {
-        return s_multicastInOpsMeasurement;
-    }
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLong s_multicastInData = new AtomicLong();
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLongMeasurementProvider s_multicastInDataMeasurement = new AtomicLongMeasurementProvider(s_multicastInData);
-    
-    /**
-     * Multicast in data.
-     */
-    public static AtomicLongMeasurementProvider MulticastInDataMeasurement() {
-        return s_multicastInDataMeasurement;
-    }
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLong s_unicastOutOps = new AtomicLong();
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLongMeasurementProvider s_unicastOutOpsMeasurement = new AtomicLongMeasurementProvider(s_unicastOutOps);
-    
-    /**
-     * Unicast in operations.
-     */
-    public static AtomicLongMeasurementProvider UnicastOutOpsMeasurement() {
-        return s_unicastOutOpsMeasurement;
-    }    
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLong s_unicastOutData = new AtomicLong();
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLongMeasurementProvider s_unicastOutDataMeasurement = new AtomicLongMeasurementProvider(s_unicastOutData);
-    
-    /**
-     * Unicast out data.
-     */
-    public static AtomicLongMeasurementProvider UnicastOutDataMeasurement() {
-        return s_unicastOutDataMeasurement;
-    }    
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLong s_unicastInOps = new AtomicLong();
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLongMeasurementProvider s_unicastInOpsMeasurement = new AtomicLongMeasurementProvider(s_unicastInOps);
-    
-    /**
-     * Unicast in operations.
-     */
-    public static AtomicLongMeasurementProvider UnicastInOpsMeasurement() {
-        return s_unicastInOpsMeasurement;
-    }
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLong s_unicastInData = new AtomicLong();
-    
-    /**
-     * (instrumentation)
-     */
-    private static AtomicLongMeasurementProvider s_unicastInDataMeasurement = new AtomicLongMeasurementProvider(s_unicastInData);
-    
-    /**
-     * Unicast in data.
-     */
-    public static AtomicLongMeasurementProvider UnicastInDataMeasurement() {
-        return s_unicastInDataMeasurement;
-    }    
-    
-    
-    /**
      * Returns '127.0.0.99' as a dummy address, normally when no network services are available.
      * Using '99' to know what's going on if it happens to come up.
      */
-    private static InetAddress s_dummyInetAddress = parseNumericalIPAddress("127.0.0.99"); 
+    private static InetAddress s_dummyInetAddress = Discovery.parseNumericalIPAddress("127.0.0.99"); 
 
     /**
      * (logging)
@@ -344,12 +191,12 @@ public class NodelAutoDNS extends AutoDNS {
     /**
      * (as an InetAddress; will never be null)
      */
-    private InetAddress _group = parseNumericalIPAddress(MDNS_GROUP);
+    private InetAddress _group = Discovery.parseNumericalIPAddress(Discovery.MDNS_GROUP);
     
     /**
      * (as an InetSocketAddress (with port); will never be null)
      */
-    private InetSocketAddress _groupSocketAddress = new InetSocketAddress(_group, MDNS_PORT);
+    private InetSocketAddress _groupSocketAddress = new InetSocketAddress(_group, Discovery.MDNS_PORT);
     
     /**
      * Whether or not we're probing for client. It will probe on start up and then deactivate.
@@ -554,7 +401,7 @@ public class NodelAutoDNS extends AutoDNS {
                     _recycleReceiver = false;
                 }
                 
-                socket = createMulticastSocket(s_receiveSocketlabel, s_interface, MDNS_PORT);
+                socket = createMulticastSocket(s_receiveSocketlabel, s_interface, Discovery.MDNS_PORT);
                 
                 synchronized(_lock) {
                     // make sure not flagged since reset
@@ -583,11 +430,11 @@ public class NodelAutoDNS extends AutoDNS {
                     InetAddress recvAddr = dp.getAddress();
 
                     if (recvAddr.isMulticastAddress()) {
-                        s_multicastInData.addAndGet(dp.getLength());
-                        s_multicastInOps.incrementAndGet();
+                        Discovery.s_multicastInData.addAndGet(dp.getLength());
+                        Discovery.s_multicastInOps.incrementAndGet();
                     } else {
-                        s_unicastInData.addAndGet(dp.getLength());
-                        s_unicastInOps.incrementAndGet();
+                        Discovery.s_unicastInData.addAndGet(dp.getLength());
+                        Discovery.s_unicastInOps.incrementAndGet();
                     }
                     
                     // check whether it's external i.e. completely different IP address
@@ -671,11 +518,11 @@ public class NodelAutoDNS extends AutoDNS {
                     }
 
                     if (dp.getAddress().isMulticastAddress()) {
-                        s_multicastInData.addAndGet(dp.getLength());
-                        s_multicastInOps.incrementAndGet();
+                        Discovery.s_multicastInData.addAndGet(dp.getLength());
+                        Discovery.s_multicastInOps.incrementAndGet();
                     } else {
-                        s_unicastInData.addAndGet(dp.getLength());
-                        s_unicastInOps.incrementAndGet();
+                        Discovery.s_unicastInData.addAndGet(dp.getLength());
+                        Discovery.s_unicastInOps.incrementAndGet();
                     }
                     
                     enqueueForProcessing(dp, s_sendSocketLabel);
@@ -1055,11 +902,11 @@ public class NodelAutoDNS extends AutoDNS {
             socket.send(packet);
             
             if (to.getAddress().isMulticastAddress()) {
-                s_multicastOutData.addAndGet(bytes.length);
-                s_multicastOutOps.incrementAndGet();
+                Discovery.s_multicastOutData.addAndGet(bytes.length);
+                Discovery.s_multicastOutOps.incrementAndGet();
             } else {
-                s_unicastOutData.addAndGet(bytes.length);
-                s_unicastOutOps.incrementAndGet();
+                Discovery.s_unicastOutData.addAndGet(bytes.length);
+                Discovery.s_unicastOutOps.incrementAndGet();
             }
 
         } catch (IOException exc) {
@@ -1349,19 +1196,6 @@ public class NodelAutoDNS extends AutoDNS {
     }
     
     /**
-     * Parses a dotted numerical IP address without throwing any exceptions.
-     * (convenience function)
-     */
-    private static InetAddress parseNumericalIPAddress(String dottedNumerical) {
-        try {
-            return InetAddress.getByName(dottedNumerical);
-            
-        } catch (Exception exc) {
-            throw new Error("Failed to resolve dotted numerical address - " + dottedNumerical);
-        }
-    }
-    
-    /**
      * Safely returns true if a packet has the same address and a socket. Used to determine its own socket.
      */
     private static boolean isSameSocketAddress(DatagramSocket socket, InetSocketAddress addr) {
@@ -1385,7 +1219,7 @@ public class NodelAutoDNS extends AutoDNS {
         
         List<InetSocketAddress> socketAddresses = new ArrayList<InetSocketAddress>();
         for (InetAddress address : addresses)
-            socketAddresses.add(new InetSocketAddress(address, MDNS_PORT));
+            socketAddresses.add(new InetSocketAddress(address, Discovery.MDNS_PORT));
 
         // at least one address is enabled, so initialise a general purpose UDP socket and
         // receiver thread.
@@ -1425,8 +1259,8 @@ public class NodelAutoDNS extends AutoDNS {
                 try {
                     socket.receive(dp);
 
-                    s_unicastInData.addAndGet(dp.getLength());
-                    s_unicastInOps.incrementAndGet();
+                    Discovery.s_unicastInData.addAndGet(dp.getLength());
+                    Discovery.s_unicastInOps.incrementAndGet();
 
                     enqueueForProcessing(dp, s_hardLinksSocketlabel);
                     
