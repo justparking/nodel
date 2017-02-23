@@ -12,6 +12,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MulticastSocket;
+import java.net.NetworkInterface;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -110,6 +111,11 @@ public class NodelAutoDNS extends AutoDNS {
      * (permanently latches false)
      */
     private volatile boolean _enabled = true;
+    
+    /**
+     * (permanently latches false)
+     */
+    public boolean _started = false;
 
     /**
      * (used in 'incomingQueue')
@@ -277,7 +283,22 @@ public class NodelAutoDNS extends AutoDNS {
      */
     private NodelAutoDNS() {
         // (no blocking code can be here)
-        
+        TopologyMonitor.shared().addOnChangeHandler(new TopologyMonitor.ChangeHandler() {
+
+            @Override
+            public void handle(List<NetworkInterface> appeared, List<NetworkInterface> disappeared) {
+                if (_enabled && !_started) {
+                    _started = true;
+                    init();
+                }
+                
+                onTopologyChanged(appeared, disappeared);
+            }
+
+        });
+    }
+    
+    private void init() {
         // create the receiver thread and start it
         _multicastHandlerThread = new Thread(new Runnable() {
 
@@ -303,7 +324,7 @@ public class NodelAutoDNS extends AutoDNS {
         _unicastHandlerThread.start();
         
         // kick off the client prober to start
-        // after 10s - 15s (randomly chosen)
+        // after 5s - 10s (randomly chosen)
         _timers.add(_timerThread.schedule(new TimerTask() {
 
             @Override
@@ -311,7 +332,7 @@ public class NodelAutoDNS extends AutoDNS {
                 handleProbeTimer();
             }
 
-        }, (long) (10000 + _random.nextDouble() * 5000), PROBE_PERIOD));
+        }, (long) (5000 + _random.nextDouble() * 5000), PROBE_PERIOD));
 
         // kick off the cleanup tasks timer
         _timers.add(_timerThread.schedule(new TimerTask() {
@@ -325,7 +346,22 @@ public class NodelAutoDNS extends AutoDNS {
 
         _logger.info("Auto discovery threads and timers started. probePeriod:{}, stalePeriodAllowed:{}",
                 DateTimes.formatShortDuration(PROBE_PERIOD), DateTimes.formatShortDuration(STALE_TIME));
-    } // (init)
+    }
+
+    /**
+     * When the topology changes, reset the sockets to pick up the new public interface address
+     */
+    protected void onTopologyChanged(List<NetworkInterface> appeared, List<NetworkInterface> disappeared) {
+        synchronized(_lock) {
+            _logger.info("Topology change detected, will recycle sockets. appeared:{}, disappeared:%s", appeared, disappeared);
+            
+            // recycle receiver which will in turn recycle sender
+            _recycleReceiver = true;
+            
+            // "signal" thread
+            Stream.safeClose(_receiveSocket);
+        }
+    }
 
     /**
      * Creates a new socket, cleaning up if anything goes wrong in the process
@@ -372,7 +408,7 @@ public class NodelAutoDNS extends AutoDNS {
                     _recycleReceiver = false;
                 }
                 
-                socket = createMulticastSocket(s_receiveSocketlabel, s_interface, Discovery.MDNS_PORT);
+                socket = createMulticastSocket(s_receiveSocketlabel, TopologyMonitor.shared().getLikelyPublicAddress(), Discovery.MDNS_PORT);
                 
                 synchronized(_lock) {
                     // make sure not flagged since reset
@@ -464,7 +500,7 @@ public class NodelAutoDNS extends AutoDNS {
                     _recycleSender = false;
                 }
 
-                socket = createMulticastSocket(s_sendSocketLabel, s_interface, 0);
+                socket = createMulticastSocket(s_sendSocketLabel, TopologyMonitor.shared().getLikelyPublicAddress(), 0);
 
                 // make sure a recycle request hasn't since occurred
                 synchronized (_lock) {

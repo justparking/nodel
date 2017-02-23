@@ -206,7 +206,7 @@ public class NodelHostHTTPD extends NanoHTTPD {
         // and the full web-address
         String publicIP = TopologyMonitor.shared().getLikelyPublicAddress().getHostAddress(); 
         
-        String httpNodeAddress = String.format("http://%s:%s%s/",publicIP , Nodel.getHTTPPort(), Nodel.getHTTPSuffix());
+        String httpNodeAddress = String.format("http://%s:%s%s",publicIP , Nodel.getHTTPPort(), Nodel.getHTTPSuffix());
         String httpAddress = String.format("http://%s:%s", publicIP, Nodel.getHTTPPort());
         
         Nodel.updateHTTPAddresses(httpAddress, httpNodeAddress);

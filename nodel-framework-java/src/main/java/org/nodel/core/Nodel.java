@@ -223,7 +223,7 @@ public class Nodel {
     private static InetAddress interfaceToUse;
 
     /**
-     * Gets the interface that Nodel will bind to.
+     * Gets the interface that Nodel will bind to (or null if automatic binding should be done)
      */
     public static InetAddress getInterfaceToUse() {
         return interfaceToUse;
@@ -234,9 +234,6 @@ public class Nodel {
      */
     public static void setInterfaceToUse(InetAddress inetAddr) {
         interfaceToUse = inetAddr;
-        
-        // immediately update the MDNS interface
-        AutoDNS.setInterface(inetAddr);
     }
     
     /**
