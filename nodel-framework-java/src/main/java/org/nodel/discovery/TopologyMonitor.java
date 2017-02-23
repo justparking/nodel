@@ -140,8 +140,6 @@ public class TopologyMonitor {
                
                 tryMonitorInterfaces();
 
-                System.out.println("testing in " + POLLING_INTERVALS[_pollingSlot] + "ms...");
-
                 // then after a minute...
                 _timerThread.schedule(_threadPool, this, POLLING_INTERVALS[_pollingSlot]);
             }
