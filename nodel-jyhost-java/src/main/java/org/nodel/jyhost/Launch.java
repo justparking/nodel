@@ -274,7 +274,6 @@ public class Launch {
             // prevent unintended duplicate instances
             createHostInstanceLockOrFail();
 
-            System.out.println("    (web interface available at " + Nodel.getHTTPAddress() + ")\n");
             _logger.info("HTTP interface bound to TCP port " + Nodel.getHTTPPort());
 
             break;

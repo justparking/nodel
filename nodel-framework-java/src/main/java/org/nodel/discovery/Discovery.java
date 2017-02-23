@@ -1,12 +1,9 @@
 package org.nodel.discovery;
 
-import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.nodel.diagnostics.AtomicLongMeasurementProvider;
-import org.nodel.io.Stream;
 import org.nodel.threading.ThreadPool;
 import org.nodel.threading.Timers;
 
@@ -55,7 +52,7 @@ public class Discovery {
     public static ThreadPool threadPool() {
         return instance()._threadPool;
     }
-    
+
     /**
      * (private constructor)
      */
@@ -227,48 +224,5 @@ public class Discovery {
             throw new Error("Failed to resolve dotted numerical address - " + dottedNumerical);
         }
     }
-    
-    /**
-     * This special method ('hack') returns the likely 'public' interface address. It's the most convenient way in Java
-     * to interrogate the IP routing table when multiple network interfaces are present.
-     * 
-     * It uses a UDP socket to test the table without actually sending anything.
-     * 
-     * Should normally be called when a topology change is detected.
-     */
-    public static InetAddress getLikelyPublicAddress() {
-        final String[] DEFAULT_TESTS = new String[] { "8.8.8.8",         // when a default gateway exists
-                                                      "255.255.255.255", // when subnet routing exists
-                                                      "127.0.0.1" };     // when only a loopback exists
-        InetAddress result = null;
-        
-        try {
-            for (String target : DEFAULT_TESTS) {
-                DatagramSocket ds = null;
-                try {
-                    ds = new DatagramSocket();
-
-                    // this will not _actually_ connect to anything
-                    ds.connect(new InetSocketAddress(InetAddress.getByName(target), 0));
-
-                    result = ds.getLocalAddress();
-
-                    break;
-
-                } catch (Exception exc) {
-                    // this test failed, continue with the others
-                    continue;
-
-                } finally {
-                    Stream.safeClose(ds);
-                }
-            } // (for)
-
-        } catch (Exception exc) {
-            // all tests failed, just return the loop-back
-        }
-
-        return result != null ? result : Discovery.IPv4Loopback;
-    } // (method)    
 
 }

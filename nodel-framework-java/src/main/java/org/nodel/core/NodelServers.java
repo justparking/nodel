@@ -20,7 +20,6 @@ import org.nodel.Handler;
 import org.nodel.Handlers;
 import org.nodel.SimpleName;
 import org.nodel.discovery.AutoDNS;
-import org.nodel.discovery.Discovery;
 import org.nodel.discovery.TopologyMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -212,7 +211,7 @@ public class NodelServers {
     protected void onStarted(final Integer port) {
         logger.info("Channel server created. port:{}", port);
 
-        Nodel.updateTCPAddress(String.format("tcp://%s:%s", Discovery.getLikelyPublicAddress(), port));
+        Nodel.updateTCPAddress(String.format("tcp://%s:%s", TopologyMonitor.shared().getLikelyPublicAddress().getHostAddress(), port));
 
         // update on topology changes too
 
@@ -221,7 +220,7 @@ public class NodelServers {
 
             @Override
             public void handle(List<NetworkInterface> appeared, List<NetworkInterface> disappeared) {
-                Nodel.updateTCPAddress(String.format("tcp://%s:%s", Discovery.getLikelyPublicAddress(), port));
+                Nodel.updateTCPAddress(String.format("tcp://%s:%s", TopologyMonitor.shared().getLikelyPublicAddress().getHostAddress(), port));
             }
 
         });

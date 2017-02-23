@@ -32,7 +32,6 @@ import org.nodel.core.NodelClients.NodeURL;
 import org.nodel.diagnostics.Diagnostics;
 import org.nodel.discovery.AdvertisementInfo;
 import org.nodel.discovery.AutoDNS;
-import org.nodel.discovery.Discovery;
 import org.nodel.discovery.TopologyMonitor;
 import org.nodel.host.BaseNode;
 import org.nodel.host.NanoHTTPD;
@@ -181,9 +180,6 @@ public class NodelHostHTTPD extends NanoHTTPD {
         // update with actual listening port
         Nodel.setHTTPPort(getListeningPort());
         
-        // ... and addresses
-        updateAddresses();
-
         // and watch for future interface changes
         TopologyMonitor.shared().addOnChangeHandler(new TopologyMonitor.ChangeHandler() {
 
@@ -208,12 +204,14 @@ public class NodelHostHTTPD extends NanoHTTPD {
      */
     private void updateAddresses() {
         // and the full web-address
-        String publicIP =Discovery.getLikelyPublicAddress().getHostAddress(); 
+        String publicIP = TopologyMonitor.shared().getLikelyPublicAddress().getHostAddress(); 
         
         String httpNodeAddress = String.format("http://%s:%s%s/",publicIP , Nodel.getHTTPPort(), Nodel.getHTTPSuffix());
         String httpAddress = String.format("http://%s:%s", publicIP, Nodel.getHTTPPort());
         
         Nodel.updateHTTPAddresses(httpAddress, httpNodeAddress);
+        
+        System.out.println("    (web interface available at " + Nodel.getHTTPAddress() + ")\n");
     }
     
     /**

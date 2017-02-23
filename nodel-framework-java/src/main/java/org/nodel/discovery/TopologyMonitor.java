@@ -1,7 +1,9 @@
 package org.nodel.discovery;
 
+import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -10,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.nodel.io.Stream;
 import org.nodel.threading.ThreadPool;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
@@ -22,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * Starts after a short delay and then periodically (every 4 mins)
  */
 public class TopologyMonitor {
-    
+
     /**
      * (logging)
      */
@@ -70,6 +73,8 @@ public class TopologyMonitor {
      */
     private List<ChangeHandler> _onChangeHandlers = new ArrayList<ChangeHandler>();
 
+    private InetAddress _likelyPublicAddress = Discovery.IPv4Loopback;
+
     /**
      * Adds a callback for topology changes (order is "new interfaces", "old interfaces")
      */
@@ -109,10 +114,20 @@ public class TopologyMonitor {
      */
     public static TopologyMonitor shared() {
         return Instance.INSTANCE;
-    }    
+    }
     
     /**
-     * kick off a monitor after 2 seconds, 1 minute, then every 4 minutes to cover a typical
+     * For adjustable polling intervals.
+     */
+    private int[] POLLING_INTERVALS = new int[] {2000, 5000, 15000, 15000, 60000, 120000};
+    
+    /**
+     * (relates to POLLING_INTERVALS)
+     */
+    private int _pollingSlot = 0;
+    
+    /**
+     * kick off a monitor after 2 seconds, then gradually up to every 4 minutes to cover a typical
      * fresh system boot-up sequence where interfaces may take some time to settle.
      */
     private void kickOffTimer() {
@@ -120,20 +135,15 @@ public class TopologyMonitor {
 
             @Override
             public void run() {
+                // move the polling "slot" up
+                _pollingSlot = Math.min(_pollingSlot + 1, POLLING_INTERVALS.length - 1);
+               
                 tryMonitorInterfaces();
 
+                System.out.println("testing in " + POLLING_INTERVALS[_pollingSlot] + "ms...");
+
                 // then after a minute...
-                _timerThread.schedule(_threadPool, new TimerTask() {
-
-                    @Override
-                    public void run() {
-                        tryMonitorInterfaces();
-
-                        // ...then every 4 minutes
-                        _timerThread.schedule(_threadPool, this, 15000); // TODO: revert this
-                    }
-
-                }, 15000); // TODO: revert this to 60000
+                _timerThread.schedule(_threadPool, this, POLLING_INTERVALS[_pollingSlot]);
             }
 
         }, 2000);
@@ -144,7 +154,10 @@ public class TopologyMonitor {
      * (involves blocking I/O)
      */
     private void monitorInterfaces() {
-        Set<NetworkInterface> activeSet = listValidInterfaces();
+        Set<NetworkInterface> activeSet = new HashSet<>(4);
+        Set<InetAddress> activeAddresses = new HashSet<>(4);
+
+        listValidInterfaces(activeSet, activeAddresses);
 
         // new interfaces
         List<NetworkInterface> newly = new ArrayList<NetworkInterface>(activeSet.size());
@@ -179,8 +192,16 @@ public class TopologyMonitor {
 
             _logger.info("{}: interface disappeared! ", intf);
         }
-
-        // no notify handlers...
+                
+        // do internal test first before notifying anyone
+        if (hasChanged) {
+            _likelyPublicAddress = testForLikelyPublicAddress(activeAddresses);
+            
+            // and temporarily poll quicker again (might be general NIC activity)
+            _pollingSlot = 0;
+        }
+ 
+        // now notify handlers...
 
         // remove previous handlers
         synchronized (_removedOnChangeHandlers) {
@@ -244,9 +265,7 @@ public class TopologyMonitor {
     /**
      * Scans for 'up', non-loopback, multicast-supporting, network interfaces with at least one IPv4 address.
      */
-    private Set<NetworkInterface> listValidInterfaces() {
-        Set<NetworkInterface> set = new HashSet<NetworkInterface>(3);
-        
+    private void listValidInterfaces(Set<NetworkInterface> refNicSet, Set<InetAddress> refAddrSet) {
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
 
@@ -259,13 +278,15 @@ public class TopologyMonitor {
                     
                     // check for at least one IPv4 address and check loopback status again for good measure
                     for (InetAddress address : Collections.list(intf.getInetAddresses())) {
-                        if (address instanceof Inet4Address)
+                        if (address instanceof Inet4Address) {
+                            refAddrSet.add(address);
                             valid = true;
+                        }
                     }
 
-                    // add to list if valid
+                    // add to list if at least one IP4 address present
                     if (valid)
-                        set.add(intf);
+                        refNicSet.add(intf);
 
                 } catch (Exception exc) {
                     // skip this interface
@@ -274,9 +295,53 @@ public class TopologyMonitor {
         } catch (Exception exc) {
             warn("intf_enumeration", "Was not able to enumerate network interfaces", exc);
         }
-        
-        return set;
     }
+    
+    /**
+     * Returns the likely public address given the detected topology.
+     * (returns immediately)
+     */
+    public InetAddress getLikelyPublicAddress() {
+        return _likelyPublicAddress;
+    }
+
+    
+    /**
+     * This special method ('hack') returns the likely 'public' interface address. It's the most convenient way in Java
+     * to interrogate the IP routing table when multiple network interfaces are present.
+     * 
+     * It uses a UDP socket to test the table. Unfortunately, OSX requires that a packet
+     * is actually sent before the interface can be determined. All other OSs do not.
+     * 
+     * Should be called when a topology change is detected.
+     */
+    private static InetAddress testForLikelyPublicAddress(Set<InetAddress> nics) {
+        final String[] DEFAULT_TESTS = new String[] { "8.8.8.8",         // when a default gateway exists
+                                                      "255.255.255.255", // when subnet routing exists
+                                                      "127.0.0.1" };     // when only a loopback exists
+        InetAddress result = null;
+
+        // go through each target and test against each interface
+        for (String target : DEFAULT_TESTS) {
+            for (InetAddress intfAddr : nics) {
+                DatagramSocket ds = null;
+                try {
+                    ds = new DatagramSocket(new InetSocketAddress(intfAddr, 0));
+                    ds.connect(new InetSocketAddress(target, 88)); // (port 88 is arbitrary)
+
+                    return intfAddr;
+
+                } catch (Exception exc) {
+                    // keep trying;
+
+                } finally {
+                    Stream.safeClose(ds);
+                }
+            }
+        }
+
+        return result != null ? result : Discovery.IPv4Loopback;
+    } // (method)
     
     /**
      * Warning with suppression.
