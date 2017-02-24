@@ -29,9 +29,9 @@ import org.slf4j.LoggerFactory;
 public class InterfaceAdvertiser {
     
     /**
-     * (logging)
+     * (init in constructor)
      */
-    private Logger _logger = LoggerFactory.getLogger(NodelAutoDNS.class);
+    private Logger _logger;
     
     /**
      * The thread to receive the multicast data.
@@ -97,6 +97,8 @@ public class InterfaceAdvertiser {
     private NodelAutoDNS _host;
     
     public InterfaceAdvertiser(InetAddress intf, NodelAutoDNS host) {
+        _logger = LoggerFactory.getLogger(this.getClass().getName() + "." + intf.getHostAddress().replace('.', '_'));
+        
         _intf = intf;
         _host = host;
         
@@ -108,7 +110,7 @@ public class InterfaceAdvertiser {
                 multicastReceiverThreadMain();
             }
 
-        }, "autodns_multicastreceiver");
+        }, "recv_thread");
         _multicastHandlerThread.setDaemon(true);
         _multicastHandlerThread.start();
     }
@@ -150,8 +152,10 @@ public class InterfaceAdvertiser {
                 socket = createMulticastSocket(_intf, Discovery.MDNS_PORT);
                 
                 synchronized(_lock) {
-                    // make sure not flagged since reset
-                    _receiveSocket = socket;
+                    if (!_enabled)
+                        Stream.safeClose(socket);
+                    else
+                        _receiveSocket = socket;
                 }
 
                 while (_enabled) {
@@ -457,7 +461,9 @@ public class InterfaceAdvertiser {
      */
     public void shutdown() {
         // clear flag
-        _enabled = false;
+        synchronized (_lock) {
+            _enabled = false;
+        }
         
         Stream.safeClose(_receiveSocket);
     }

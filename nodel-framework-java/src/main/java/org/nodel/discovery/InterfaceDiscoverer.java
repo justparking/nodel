@@ -33,9 +33,9 @@ public class InterfaceDiscoverer {
     private static final int PROBE_PERIOD = 45000;
     
     /**
-     * (logging)
+     * (init. in constructor)
      */
-    private Logger _logger = LoggerFactory.getLogger(NodelAutoDNS.class);
+    private Logger _logger;
     
     /**
      * The thread to receive the multicast data.
@@ -140,6 +140,8 @@ public class InterfaceDiscoverer {
     private InetAddress _intf;
     
     public InterfaceDiscoverer(InetAddress intf, NodelAutoDNS host) {
+        _logger = LoggerFactory.getLogger(this.getClass().getName() + "." + intf.getHostAddress().replace('.', '_'));
+        
         _intf = intf;
         _host = host;
         
@@ -151,7 +153,7 @@ public class InterfaceDiscoverer {
                 unicastReceiverThreadMain();
             }
 
-        }, "autodns_unicastreceiver");
+        }, "recv_thread");
         _unicastHandlerThread.setDaemon(true);
         _unicastHandlerThread.start();
         
@@ -183,10 +185,7 @@ public class InterfaceDiscoverer {
             // in previous versions the interface was selected using constructor instead of 'socket.setInterface(intf)' 
             // but that uncovered side-effect in OSX which caused 'cannot assign address' Java bug
             
-            socket = new MulticastSocket(port); // (port '0' means any port)
-            
-            if (intf != null)
-                socket.setInterface(intf);
+            socket = new MulticastSocket(new InetSocketAddress(intf, port)); // (port '0' means any port)
 
             // join the multicast group
             socket.joinGroup(Discovery.MDNS_GROUP);
@@ -211,7 +210,14 @@ public class InterfaceDiscoverer {
 
             try {
                 socket = createMulticastSocket(_intf, 0);
-
+                
+                synchronized(_lock) {
+                    if (!_enabled)
+                        Stream.safeClose(socket);
+                    else
+                        _sendSocket = socket;
+                }
+                
                 while (_enabled) {
                     DatagramPacket dp = UDPPacketRecycleQueue.instance().getReadyToUsePacket();
 
@@ -460,14 +466,16 @@ public class InterfaceDiscoverer {
      * Permanently shuts down all related resources.
      */
     public void shutdown() {
-        // clear flag
-        _enabled = false;
+        synchronized (_lock) {
+            // clear flag
+            _enabled = false;
+        }
+        
+        Stream.safeClose(_sendSocket);
         
         // release timers
         for (TimerTask timer : _timers)
             timer.cancel();
-
-        Stream.safeClose(_sendSocket);
     }
     
     /**
