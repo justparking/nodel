@@ -7,35 +7,19 @@ package org.nodel.discovery;
  */
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.MulticastSocket;
-import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
-import java.util.Random;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicLong;
 
-import org.nodel.DateTimes;
-import org.nodel.Exceptions;
 import org.nodel.SimpleName;
-import org.nodel.Threads;
 import org.nodel.core.NodeAddress;
-import org.nodel.core.Nodel;
-import org.nodel.io.Stream;
-import org.nodel.io.UTF8Charset;
-import org.nodel.reflection.Serialisation;
-import org.nodel.threading.ThreadPool;
 import org.nodel.threading.TimerTask;
-import org.nodel.threading.Timers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,12 +39,6 @@ public class NodelAutoDNS extends AutoDNS {
 	 */
 	private static final long STALE_TIME = 2 * PROBE_PERIOD + 10000;
 	
-	/**
-	 * How long to allow the multicast receiver to be silent. Will
-	 * reinitialise socket as a precaution.
-	 */
-	private static final int SILENCE_TOLERANCE = 3 * PROBE_PERIOD + 10000;
-    
     /**
      * (logging)
      */
@@ -77,94 +55,19 @@ public class NodelAutoDNS extends AutoDNS {
     private Object _clientLock = new Object();
     
     /**
-     * Used to micro-stagger responses.
-     */
-    private Random _random = new Random();
-    
-    /**
-     * Thread-pool for IO operations.
-     */
-    private ThreadPool _threadPool = Discovery.threadPool();
-    
-    /**
-     * This class' timer thread.
-     */
-    private Timers _timerThread = Discovery.timerThread();    
-    
-    /**
-     * The thread to receive the multicast data.
-     */
-    private Thread _multicastHandlerThread;
-    
-    /**
-     * The thread to receive the multicast data.
-     */
-    private Thread _unicastHandlerThread;
-    
-    /**
      * (for graceful clean up)
      */
-    private List<TimerTask> _timers = new ArrayList<TimerTask>();
+    private TimerTask _cleanupTimer;
     
     /**
      * (permanently latches false)
      */
-    private volatile boolean _enabled = true;
-    
-    /**
-     * (permanently latches false)
-     */
-    public boolean _started = false;
-
-    /**
-     * (used in 'incomingQueue')
-     */
-    private class QueueEntry {
-        
-        /**
-         * For logging purposes
-         */
-        public final String source;
-        
-        /**
-         * The packet
-         */
-        public final DatagramPacket packet;
-        
-        public QueueEntry(String source, DatagramPacket packet) {
-            this.source = source;
-            this.packet = packet;
-        }
-        
-    }
-    
-    /**
-     * The incoming queue.
-     * (self locked)
-     */
-    private Queue<QueueEntry>_incomingQueue = new LinkedList<QueueEntry>();
-    
-    /**
-     * Used to avoid unnecessary thread overlapping.
-     */
-    private boolean _isProcessingIncomingQueue = false;
-    
-    /**
-     * Incoming queue processor runnable.
-     */
-    private Runnable _incomingQueueProcessor = new Runnable() {
-    	
-        @Override
-        public void run() {
-            processIncomingPacketQueue();
-        }
-        
-    };    
+    private boolean _enabled = true;
     
     /**
      * Used in '_services'. 
      */
-    private class ServiceItem {
+    public class ServiceItem {
         
         SimpleName _name;
         
@@ -185,96 +88,14 @@ public class NodelAutoDNS extends AutoDNS {
     private ConcurrentMap<SimpleName, AdvertisementInfo> _advertisements = new ConcurrentHashMap<SimpleName, AdvertisementInfo>();
 
     /**
-     * (as an InetAddress; will never be null)
-     */
-    private InetAddress _group = Discovery.parseNumericalIPAddress(Discovery.MDNS_GROUP);
-    
-    /**
-     * (as an InetSocketAddress (with port); will never be null)
-     */
-    private InetSocketAddress _groupSocketAddress = new InetSocketAddress(_group, Discovery.MDNS_PORT);
-    
-    /**
-     * Whether or not we're probing for client. It will probe on start up and then deactivate.
-     * e.g. 'list' is called.
-     * (nanos)
-     */
-    private AtomicLong _lastList = new AtomicLong(System.nanoTime());
-    
-    /**
-     * The last time a probe occurred.
-     * (nanos)
-     */
-    private AtomicLong _lastProbe = new AtomicLong(0);
-    
-    /**
-     * Whether or not client resolution is being used. This affects whether polling
-     * should take place. 
-     * (one way switch)
-     */
-    private volatile boolean _usingResolution = false;
-    
-    /**
-     * The time before probing can be suspended if there haven't been
-     * any recent 'list' or 'resolve' operation. 5 minutes.
-     * 
-     * (millis)
-     */
-    private static final long LIST_ACTIVITY_PERIOD = 5 * 60 * 1000;
-    
-    /**
      * General purpose lock for sendSocket, receiveSocket, enabled, recycle*flag
      */
     private Object _lock = new Object();
+    
+    private Map<InetAddress, InterfaceAdvertiser> _advertisers = new HashMap<>();
+    
+    private Map<InetAddress, InterfaceDiscoverer> _discoverers = new HashMap<>();
 
-    /**
-     * For multicast sends and unicast receives on arbitrary port.
-     * (locked around 'lock')
-     */
-    private MulticastSocket _sendSocket;
-    
-    /**
-     * (socket label)
-     */
-    private final static String s_sendSocketLabel = "[multicastSender_unicastSenderReceiver]";    
-    
-    /**
-     * (flag; locked around 'lock')
-     */
-    private boolean _recycleSender;
-    
-    /**
-     * For multicast receives on the MDNS port.
-     */
-    private MulticastSocket _receiveSocket;
-    
-    /**
-     * (socket label)
-     */
-    private static String s_receiveSocketlabel = "[multicastReceiver]";
-    
-    /**
-     * (flag; locked around 'lock')
-     */
-    private boolean _recycleReceiver;
-    
-    /**
-     * Used if direct "multicast" (using unicast) is enabled.
-     */
-    private DatagramSocket _hardLinksSocket;
-    
-    /**
-     * (socket label)
-     */
-    private static String s_hardLinksSocketlabel = "[unicastHardLinksSenderReceiver]";
-    
-    /**
-     * Holds a safe list of resolved addresses and ports that should be "directly" multicast to (i.e. using unicast).
-     * Can be used if multicasting is unreliable or inconvenient.
-     * (is either null or has at least one element)
-     */
-    private List<InetSocketAddress> _hardLinksAddresses = composeHardLinksSocketAddresses();
-    
     /**
      * Returns immediately.
      * 
@@ -286,411 +107,39 @@ public class NodelAutoDNS extends AutoDNS {
 
             @Override
             public void handle(List<InetAddress> appeared, List<InetAddress> disappeared) {
-                if (_enabled && !_started) {
-                    _started = true;
-                    init();
-                }
-                
                 onTopologyChanged(appeared, disappeared);
             }
 
         });
-    }
-    
-    private void init() {
-        // create the receiver thread and start it
-        _multicastHandlerThread = new Thread(new Runnable() {
-
-            @Override
-            public void run() {
-                multicastReceiverThreadMain();
-            }
-
-        }, "autodns_multicastreceiver");
-        _multicastHandlerThread.setDaemon(true);
-        _multicastHandlerThread.start();
-
-        // create the receiver thread and start it
-        _unicastHandlerThread = new Thread(new Runnable() {
-
-            @Override
-            public void run() {
-                unicastReceiverThreadMain();
-            }
-
-        }, "autodns_unicastreceiver");
-        _unicastHandlerThread.setDaemon(true);
-        _unicastHandlerThread.start();
         
-        // kick off the client prober to start
-        // after 5s - 10s (randomly chosen)
-        _timers.add(_timerThread.schedule(new TimerTask() {
-
-            @Override
-            public void run() {
-                handleProbeTimer();
-            }
-
-        }, (long) (5000 + _random.nextDouble() * 5000), PROBE_PERIOD));
-
         // kick off the cleanup tasks timer
-        _timers.add(_timerThread.schedule(new TimerTask() {
+        _cleanupTimer = Discovery.timerThread().schedule(new TimerTask() {
 
             @Override
             public void run() {
                 handleCleanupTimer();
             }
 
-        }, 60000, 60000));;
-
-        _logger.info("Auto discovery threads and timers started. probePeriod:{}, stalePeriodAllowed:{}",
-                DateTimes.formatShortDuration(PROBE_PERIOD), DateTimes.formatShortDuration(STALE_TIME));
+        }, 60000, 60000);
     }
 
     /**
      * When the topology changes, reset the sockets to pick up the new public interface address
      */
-    protected void onTopologyChanged(List<InetAddress> appeared, List<InetAddress> disappeared) {
+    private void onTopologyChanged(List<InetAddress> appeared, List<InetAddress> disappeared) {
         synchronized(_lock) {
-            _logger.info("Topology change detected, will recycle sockets. appeared:{}, disappeared:%s", appeared, disappeared);
-            
-            // recycle receiver which will in turn recycle sender
-            _recycleReceiver = true;
-            
-            // "signal" thread
-            Stream.safeClose(_receiveSocket);
-        }
-    }
-
-    /**
-     * Creates a new socket, cleaning up if anything goes wrong in the process
-     */
-    private MulticastSocket createMulticastSocket(String label, InetAddress intf, int port) throws Exception {
-        MulticastSocket socket = null;
-
-        try {
-            _logger.info("Preparing {} socket. interface:{}, port:{}, group:{}", 
-                    label, (intf == null ? "default" : intf), (port == 0 ? "any" : port), _group);
-            
-            // in previous versions the interface was selected using constructor instead of 'socket.setInterface(intf)' 
-            // but that uncovered side-effect in OSX which caused 'cannot assign address' Java bug
-            
-            socket = new MulticastSocket(port); // (port '0' means any port)
-            
-            if (intf != null)
-                socket.setInterface(intf);
-
-            // join the multicast group
-            socket.joinGroup(_group);
-
-            _logger.info("{} ready. localAddr:{}", label, socket.getLocalSocketAddress());
-
-            return socket;
-
-        } catch (Exception exc) {
-            Stream.safeClose(socket);
-
-            throw exc;
-        }
-    }
-    
-    /**
-     * (thread entry-point)
-     */
-    private void multicastReceiverThreadMain() {
-        while (_enabled) {
-            MulticastSocket socket = null;
-
-            try {
-                synchronized(_lock) {
-                    // clear flag regardless
-                    _recycleReceiver = false;
-                }
-                
-                socket = createMulticastSocket(s_receiveSocketlabel, TopologyMonitor.shared().getLikelyPublicAddress(), Discovery.MDNS_PORT);
-                
-                synchronized(_lock) {
-                    // make sure not flagged since reset
-                    if (_recycleReceiver) {
-                        Stream.safeClose(socket);
-                        continue;
-                    }
-                    
-                    _receiveSocket = socket;
-                }
-
-                while (_enabled) {
-                    DatagramPacket dp = UDPPacketRecycleQueue.instance().getReadyToUsePacket();
-
-                    // ('returnPacket' will be called in 'catch' or later after use in thread-pool)
-
-                    try {
-                        socket.receive(dp);
-
-                    } catch (Exception exc) {
-                        UDPPacketRecycleQueue.instance().returnPacket(dp);
-
-                        throw exc;
-                    }
-                    
-                    InetAddress recvAddr = dp.getAddress();
-
-                    if (recvAddr.isMulticastAddress()) {
-                        Discovery.s_multicastInData.addAndGet(dp.getLength());
-                        Discovery.s_multicastInOps.incrementAndGet();
-                    } else {
-                        Discovery.s_unicastInData.addAndGet(dp.getLength());
-                        Discovery.s_unicastInOps.incrementAndGet();
-                    }
-                    
-                    // check whether it's external i.e. completely different IP address
-                    // (local multicasting would almost always be reliable)
-                    
-                    MulticastSocket otherLocal = _sendSocket;
-                    boolean isLocal = (otherLocal != null && recvAddr.equals(otherLocal.getLocalAddress()));
-
-                    // update counter which is used to detect silence
-                    if (!isLocal)
-                        _lastExternalMulticastPacket = System.nanoTime();
-                    
-                    enqueueForProcessing(dp, s_receiveSocketlabel);
-                    
-                } // (inner while)
-
-            } catch (Exception exc) {
-                // (timeouts and general IO problems)
-                
-                // clean up regardless
-                Stream.safeClose(socket);
-
-                synchronized (_lock) {
-                    if (!_enabled)
-                        break;
-
-                    if (_recycleReceiver)
-                        _logger.info(s_receiveSocketlabel + " was gracefully closed. Will reinitialise...");
-                    else
-                        _logger.warn(s_receiveSocketlabel + " receive failed; this may be a transitional condition. Will reinitialise... message was '" + exc.toString() + "'");
-                    
-                    // set flag
-                    _recycleSender = true;
-                    // "signal" other thread
-                    Stream.safeClose(_sendSocket);
-                    
-                    // stagger retry
-                    Threads.waitOnSync(_lock, 333);
-                }
-            }
-        } // (outer while)
-
-        _logger.info("This thread has run to completion.");
-    } // (method)
-
-    /**
-     * (thread entry-point)
-     */
-    private void unicastReceiverThreadMain() {
-        while (_enabled) {
-            MulticastSocket socket = null;
-
-            try {
-                synchronized (_lock) {
-                    // clear flag regardless
-                    _recycleSender = false;
-                }
-
-                socket = createMulticastSocket(s_sendSocketLabel, TopologyMonitor.shared().getLikelyPublicAddress(), 0);
-
-                // make sure a recycle request hasn't since occurred
-                synchronized (_lock) {
-                    if (_recycleSender) {
-                        Stream.safeClose(socket);
-                        continue;
-                    }
-
-                    _sendSocket = socket;
-                }
-
-                while (_enabled) {
-                    DatagramPacket dp = UDPPacketRecycleQueue.instance().getReadyToUsePacket();
-
-                    try {
-                        socket.receive(dp);
-
-                    } catch (Exception exc) {
-                        UDPPacketRecycleQueue.instance().returnPacket(dp);
-
-                        throw exc;
-                    }
-
-                    if (dp.getAddress().isMulticastAddress()) {
-                        Discovery.s_multicastInData.addAndGet(dp.getLength());
-                        Discovery.s_multicastInOps.incrementAndGet();
-                    } else {
-                        Discovery.s_unicastInData.addAndGet(dp.getLength());
-                        Discovery.s_unicastInOps.incrementAndGet();
-                    }
-                    
-                    enqueueForProcessing(dp, s_sendSocketLabel);
-
-                } // (inner while)
-                
-            } catch (Exception exc) {
-                boolean wasClosed = (socket != null && socket.isClosed());
-                
-                // clean up regardless
-                Stream.safeClose(socket);
-
-                synchronized (_lock) {
-                    if (!_enabled)
-                        break;
-
-                    if (wasClosed)
-                        _logger.info(s_sendSocketLabel + " was signalled to gracefully close. Will reinitialise...");
-                    else
-                        _logger.warn(s_sendSocketLabel + " receive failed; will reinitialise...", exc);
-
-                    // stagger retry
-                    Threads.waitOnSync(_lock, 333);
-                }
-            }
-        } // (outer while)
-        
-        _logger.info("This thread has run to completion.");
-    }
-
-    private void enqueueForProcessing(DatagramPacket dp, String label) {
-        // place it in the queue and make it process if necessary
-        synchronized (_incomingQueue) {
-            QueueEntry qe = new QueueEntry(label, dp);
-            _incomingQueue.add(qe);
-
-            // kick off the other thread to process the queue
-            // (otherwise the thread will already be processing the queue)
-            if (!_isProcessingIncomingQueue) {
-                _isProcessingIncomingQueue = true;
-                _threadPool.execute(_incomingQueueProcessor);
-            }
-        }
-    }    
-    
-    /**
-     * Processes whatever's in the queue.
-     */
-    private void processIncomingPacketQueue() {
-        while(_enabled) {
-            QueueEntry entry;
-            
-            synchronized(_incomingQueue) {
-                if (_incomingQueue.size() <= 0) {
-                    // nothing left, so clear flag and return
-                    _isProcessingIncomingQueue = false;
-
-                    return;
-                }
-
-                entry = _incomingQueue.remove();
+            for (InetAddress intf : disappeared) {
+                _advertisers.remove(intf).shutdown();
+                _discoverers.remove(intf).shutdown();
             }
             
-            DatagramPacket dp = entry.packet;
-            String source = entry.source;
-
-            try {
-                // parse packet
-                NameServicesChannelMessage message = this.parsePacket(dp);
-
-                // handle message
-                this.handleIncomingMessage(source, (InetSocketAddress) dp.getSocketAddress(), message);
-                
-            } catch (Exception exc) {
-                if (!_enabled)
-                    break;
-
-                // log nested exception summary instead of stack-trace dump
-                _logger.warn("{} while handling received packet from {}: {}", source, dp.getSocketAddress(), Exceptions.formatExceptionGraph(exc));
-                
-            } finally {
-                // make sure the packet is returned
-            	UDPPacketRecycleQueue.instance().returnPacket(entry.packet);
-            }
-        } // (while) 
-    }
-    
-    private boolean _suppressProbeLog = false;
-
-    /**
-     * The last time an external multicast packet was received.
-     * (nano-based)
-     */
-    private volatile long _lastExternalMulticastPacket = System.nanoTime(); 
-    
-    /**
-     * The client timer; determines whether probing is actually necessary
-     * (timer entry-point)
-     */
-    private void handleProbeTimer() {
-        if (_usingResolution) {
-            // client names are being resolved, so stay probing
-            _suppressProbeLog = false;
-            sendProbe();
-            
-        } else {
-            // the time difference in millis
-            long listDiff = (System.nanoTime() - _lastList.get()) / 1000000L;
-
-            if (listDiff < LIST_ACTIVITY_PERIOD) {
-                _suppressProbeLog = false;
-                sendProbe();
-                
-            } else {
-                if (!_suppressProbeLog) {
-                    _logger.info("Probing is paused because it has been more than {} since a 'list' or 'resolve' (total {}).", 
-                            DateTimes.formatShortDuration(LIST_ACTIVITY_PERIOD), DateTimes.formatShortDuration(listDiff));
-                }
-
-                _suppressProbeLog = true;
+            for (InetAddress intf: appeared) {
+                _advertisers.put(intf, new InterfaceAdvertiser(intf, this));
+                _discoverers.put(intf, new InterfaceDiscoverer(intf, this));
             }
         }
     }
     
-	/**
-	 * Performs the probe asynchronously.
-	 */
-    private void sendProbe() {
-		final NameServicesChannelMessage message = new NameServicesChannelMessage();
-		
-		message.agent = Nodel.getAgent();
-
-		List<String> discoveryList = new ArrayList<String>(1);
-		discoveryList.add("*");
-
-		List<String> typesList = new ArrayList<String>(2);
-		typesList.add("tcp");
-		typesList.add("http");
-
-		message.discovery = discoveryList;
-		message.types = typesList;
-
-		_lastProbe.set(System.nanoTime());
-
-		// IO is involved so use a thread-pool
-		_threadPool.execute(new Runnable() {
-
-            @Override
-            public void run() {
-                sendMessage(_sendSocket, s_sendSocketLabel, _groupSocketAddress, message);
-
-                // check if hard links (direct "multicasting") are enabled for some hosts
-                if (_hardLinksAddresses != null && _hardLinksSocket != null) {
-                    for (InetSocketAddress socketAddress : _hardLinksAddresses) {
-                        sendMessage(_hardLinksSocket, s_hardLinksSocketlabel, socketAddress, message);
-                    }
-                }
-            }
-
-        });
-	}
-
 	/**
      * Handle clean-up tasks
      * (timer entry-point)
@@ -699,8 +148,6 @@ public class NodelAutoDNS extends AutoDNS {
         long currentTime = System.nanoTime();
 
         reapStaleRecords(currentTime);
-        
-        recycleReceiverIfNecessary(currentTime);
     } // (method)  
     
     /**
@@ -734,258 +181,14 @@ public class NodelAutoDNS extends AutoDNS {
             }
         }
     } // (method)
-    
-    /**
-     * Check if the main receiver has been silent for some time so
-     * recycle the socket for best resilience.
-     */
-    private void recycleReceiverIfNecessary(long currentTime) {
-        long timeDiff = (currentTime - _lastExternalMulticastPacket) / 1000000;
-        
-        if (timeDiff > SILENCE_TOLERANCE) {
-            _logger.info("There appears to be external silence on the multicast receiver (this may or may not be expected); the socket will be recycled to ensure resilience.");
-            
-            synchronized(_lock) {
-                // recycle receiver which will in turn recycle sender
-                _recycleReceiver = true;
-                
-                // "signal" the other thread
-                Stream.safeClose(_receiveSocket);
-            }
-        }
-    }    
-
-    /**
-     * Parses the incoming packet.
-     */
-    private NameServicesChannelMessage parsePacket(DatagramPacket dp) {
-        String packetString = new String(dp.getData(), 0, dp.getLength(), UTF8Charset.instance());
-
-        return (NameServicesChannelMessage) Serialisation.coerceFromJSON(NameServicesChannelMessage.class, packetString);
-    }
-    
-    /**
-     * One responder per recipient at any stage.
-     */
-    private class Responder {
-        
-        public InetSocketAddress _recipient;
-        
-        public LinkedList<ServiceItem> _serviceSet;
-
-        private Iterator<ServiceItem> _serviceIterator;
-        
-        public Responder(InetSocketAddress recipient) {
-            _recipient = recipient;
-            
-            synchronized (_serverLock) {
-                // get a snap-shot of the service values
-                _serviceSet = new LinkedList<ServiceItem>(_services.values());
-            }
-            
-            // the service iterator
-            _serviceIterator = _serviceSet.iterator();
-        }
-        
-        /**
-         * Starts the responder. Wait a random amount of time to before
-         * actually sending anything. Staggered responses assists with receiver
-         * buffer management by the remote receivers.
-         */
-        public void start(int randomResponseDelay) {
-        	// use a random minimum delay of 333ms
-        	int delay = 333;
-        	
-        	if (randomResponseDelay > 333)
-        		delay = randomResponseDelay;
-        	
-            int timeToWait = _random.nextInt(delay);
-            
-            _timerThread.schedule(new TimerTask() {
-
-                @Override
-                public void run() {
-                    completeResponse();
-                }
-
-            }, timeToWait);
-        }
-        
-        /**
-         * Complete the necessary response, also a timer entry-point. 
-         */
-        private void completeResponse() {
-            // prepare a message
-            final NameServicesChannelMessage message = new NameServicesChannelMessage();
-            message.present = new ArrayList<String>();
-            
-            // try keep the packets relatively small by roughly guessing how much space 
-            // its JSON advertisement packet might take up
-            
-            // account for "present"... 
-            // and "addresses":["tcp://136.154.27.100:65017","http://136.154.27.100:8085/index.htm?node=%NODE%"]
-            // so start off with approx. 110 chars
-            long roughTotalSize = 110;
-            
-            while(_serviceIterator.hasNext()) {
-                ServiceItem si = _serviceIterator.next();
-                
-                String name = si._name.getOriginalName();
-                
-                // calculate size to be the name, two inverted-commas, and a comma and a possible space in between. 
-                int size = name.length() + 4;
-                roughTotalSize += size;
-                
-                message.present.add(name);
-                
-                // make sure we're not going anywhere near UDP MTU (64K),
-                // in fact, squeeze them into packets similar to size of Ethernet MTU (~1400 MTU)
-                if (roughTotalSize > 1200)
-                    break;
-            } // (while)
-            
-            message.addresses = new ArrayList<String>();
-            message.addresses.add(Nodel.getTCPAddress());
-            message.addresses.add(Nodel.getHTTPNodeAddress());
-            
-            // IO is involved so use thread-pool
-            // (and only send if the 'present' list is not empty)
-            
-            if (message.present.size() > 0) {
-                _threadPool.execute(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        sendMessage(_sendSocket, s_sendSocketLabel, _recipient, message);
-                    }
-
-                });
-            }
-            
-            // do we need this completed in the very near future?
-            // if so, space out by at least 333ms.
-            if (_serviceIterator.hasNext()) {
-                
-                _timerThread.schedule(new TimerTask() {
-
-                    @Override
-                    public void run() {
-                        completeResponse();
-                    }
-                    
-                }, 333);
-            } else {
-                synchronized(_responders) {
-                    _responders.remove(_recipient);
-                }
-            }
-        } // (method)
-        
-    } // (class)
-    
-    /**
-     * Sends the message to a recipient 
-     */
-    private void sendMessage(DatagramSocket socket, String label, InetSocketAddress to, NameServicesChannelMessage message) {
-        if (isSameSocketAddress(socket, to))
-            _logger.info("{} sending message. to=self, message={}", label, message);
-        else
-            _logger.info("{} sending message. to={}, message={}", label, to, message);
-        
-        if (socket == null) {
-        	_logger.info("{} is not available yet; ignoring send request.", label);
-        	return;
-        }
-        
-        // convert into bytes
-        String json = Serialisation.serialise(message);
-        byte[] bytes = json.getBytes(UTF8Charset.instance());
-        
-        DatagramPacket packet = new DatagramPacket(bytes, bytes.length);
-        packet.setSocketAddress(to);
-        
-        try {
-            socket.send(packet);
-            
-            if (to.getAddress().isMulticastAddress()) {
-                Discovery.s_multicastOutData.addAndGet(bytes.length);
-                Discovery.s_multicastOutOps.incrementAndGet();
-            } else {
-                Discovery.s_unicastOutData.addAndGet(bytes.length);
-                Discovery.s_unicastOutOps.incrementAndGet();
-            }
-
-        } catch (IOException exc) {
-            if (!_enabled)
-                return;
-            
-            if (socket.isClosed())
-                _logger.info(s_sendSocketLabel + " send() ignored as socket is being recycled.");
-            else
-                _logger.warn(s_sendSocketLabel + " send() failed. ", exc);
-        }
-    } // (method)
-    
-    /**
-     * The map of responders by recipient address.
-     */
-    private ConcurrentMap<SocketAddress, Responder> _responders = new ConcurrentHashMap<SocketAddress, Responder>();
-
-    /**
-     * Handles a complete packet from the socket.
-     */
-    private void handleIncomingMessage(String label, InetSocketAddress from, NameServicesChannelMessage message) {
-        if (isSameSocketAddress(_sendSocket, from))
-            _logger.info("{} message arrived. from=self, message={}", label, message);
-        else
-            _logger.info("{} message arrived. from={}, message={}", label, from, message);
-        
-        // discovery request?
-        if (message.discovery != null) {
-            // create a responder if one isn't already active
-            
-            if (Nodel.getTCPAddress() == null) {
-                _logger.info("(will not respond; nodel server port still not available)");
-                
-                return;
-            }
-
-            synchronized (_responders) {
-                if (!_responders.containsKey(from)) {
-                    Responder responder = new Responder(from);
-                    _responders.put(from, responder);
-
-                    int delay = message.delay == null ? 0 : message.delay.intValue();
-                    
-                    responder.start(delay);
-                }
-            }
-        }
-        
-        else if (message.present != null && message.addresses != null) {
-            for (String name : message.present ) {
-                synchronized (_clientLock) {
-                    SimpleName node = new SimpleName(name);
-                    AdvertisementInfo ad = _advertisements.get(node);
-                    if (ad == null) {
-                        ad = new AdvertisementInfo();
-                        ad.name = node;
-                        _advertisements.put(node, ad);
-                    }
-                    
-                    // refresh the time stamp and update the address
-                    ad.timeStamp = System.nanoTime() / 1000000;
-                    ad.addresses = message.addresses;
-                }
-            }
-        }
-        
-    } // (method)
 
     @Override
     public NodeAddress resolveNodeAddress(SimpleName node) {
     	// indicate client resolution is being used
-    	_usingResolution = true;
+        synchronized(_discoverers) {
+            for (InterfaceDiscoverer discoverer : _discoverers.values())
+                discoverer.indicateUsingResolution();
+        }
     	
         AdvertisementInfo adInfo = _advertisements.get(node);
         if(adInfo != null) {
@@ -1045,15 +248,10 @@ public class NodelAutoDNS extends AutoDNS {
 
     @Override
     public Collection<AdvertisementInfo> list() {
-    	long now = System.nanoTime();
-    	
-    	_lastList.set(now);
-    	
-    	// check how long it has been since the last probe (millis)
-        long timeSinceProbe = (now - _lastProbe.get()) / 1000000L;
-
-        if (timeSinceProbe > LIST_ACTIVITY_PERIOD)
-            sendProbe();
+    	synchronized(_discoverers) {
+    	    for(InterfaceDiscoverer discoverer : _discoverers.values())
+    	        discoverer.indicateListRequested();
+    	}
 
         // create snap-shot
         List<AdvertisementInfo> ads = new ArrayList<AdvertisementInfo>(_advertisements.size());
@@ -1065,10 +263,38 @@ public class NodelAutoDNS extends AutoDNS {
         return ads;
     }
     
+    public Collection<ServiceItem> getServicesSnapshot() {
+        synchronized (_serverLock) {
+            // get a snap-shot of the service values
+            return new LinkedList<ServiceItem>(_services.values());
+        }
+    }
+    
+    
+    public void updateAdvertisement(String name, NameServicesChannelMessage message) {
+        synchronized (_clientLock) {
+            SimpleName node = new SimpleName(name);
+            AdvertisementInfo ad = _advertisements.get(node);
+            if (ad == null) {
+                ad = new AdvertisementInfo();
+                ad.name = node;
+                _advertisements.put(node, ad);
+            }
+            
+            // refresh the time stamp and update the address
+            ad.timeStamp = System.nanoTime() / 1000000;
+            ad.addresses = message.addresses;
+        }
+    }
+    
+    
     @Override
     public AdvertisementInfo resolve(SimpleName node) {
         // indicate client resolution is being used
-        _usingResolution = true;
+        synchronized(_discoverers) {
+            for (InterfaceDiscoverer discoverer : _discoverers.values())
+                discoverer.indicateUsingResolution();
+        }
         
         return _advertisements.get(node);
     }
@@ -1081,11 +307,18 @@ public class NodelAutoDNS extends AutoDNS {
         // clear flag
         _enabled = false;
         
-        // release timers
-        for (TimerTask timer : _timers)
-            timer.cancel();
-
-        Stream.safeClose(_sendSocket, _receiveSocket, _hardLinksSocket);
+        synchronized (_advertisers) {
+            for (InetAddress intf : new ArrayList<>(_advertisers.keySet()))
+                _advertisers.remove(intf).shutdown();
+        }
+        
+        synchronized (_discoverers) {
+            for (InetAddress intf : new ArrayList<>(_discoverers.keySet()))
+                _discoverers.remove(intf).shutdown();
+        }
+        
+        // release timer
+        _cleanupTimer.cancel();
     }
     
     /**
@@ -1109,92 +342,6 @@ public class NodelAutoDNS extends AutoDNS {
      */
     public static NodelAutoDNS instance() {
         return Instance.INSTANCE;
-    }
-    
-    /**
-     * Safely returns true if a packet has the same address and a socket. Used to determine its own socket.
-     */
-    private static boolean isSameSocketAddress(DatagramSocket socket, InetSocketAddress addr) {
-        if (socket == null || addr == null)
-            return false;
-        
-        SocketAddress socketAddr = socket.getLocalSocketAddress();
-        
-        return socketAddr != null && socketAddr.equals(addr);
-    }
-    
-    /**
-     * Turns the list of addresses into "resolved" InetSocketAddresses.
-     * (should only be called once)
-     */
-    private List<InetSocketAddress> composeHardLinksSocketAddresses() {
-        List<InetAddress> addresses = Nodel.getHardLinksAddresses();
-        
-        if (addresses.size() <= 0)
-            return null;
-        
-        List<InetSocketAddress> socketAddresses = new ArrayList<InetSocketAddress>();
-        for (InetAddress address : addresses)
-            socketAddresses.add(new InetSocketAddress(address, Discovery.MDNS_PORT));
-
-        // at least one address is enabled, so initialise a general purpose UDP socket and
-        // receiver thread.
-        
-        Thread thread = new Thread(new Runnable() {
-
-            @Override
-            public void run() {
-                hardLinksReceiverThreadMain();
-            }
-
-        }, s_hardLinksSocketlabel);
-        thread.setDaemon(true);
-        thread.start();
-
-        return socketAddresses;
-    }
-
-    /**
-     * (thread entry-point)
-     */
-	private void hardLinksReceiverThreadMain() {
-		_logger.info("Instructed to use hardlinks. address:{}", _hardLinksAddresses);
-
-        DatagramSocket socket = null;
-        try {
-            // initialise a UDP socket on an arbitrary port
-            _hardLinksSocket = new DatagramSocket();
-
-            socket = _hardLinksSocket;
-
-            while (_enabled) {
-                DatagramPacket dp = UDPPacketRecycleQueue.instance().getReadyToUsePacket();
-
-                // ('returnPacket' will be called in 'catch' or later after use in thread-pool)
-
-                try {
-                    socket.receive(dp);
-
-                    Discovery.s_unicastInData.addAndGet(dp.getLength());
-                    Discovery.s_unicastInOps.incrementAndGet();
-
-                    enqueueForProcessing(dp, s_hardLinksSocketlabel);
-                    
-                } catch (Exception exc) {
-                    UDPPacketRecycleQueue.instance().returnPacket(dp);
-
-                    // ignore
-                }
-            } // (while)
-
-        } catch (Exception exc) {
-            _logger.warn("Failed to initialise [" + s_hardLinksSocketlabel + "] socket.", exc);
-        } finally {
-            _logger.info("[" + s_hardLinksSocketlabel + "] thread run to completion.");
-            
-            // close for good measure
-            Stream.safeClose(socket);
-        }
     }
 
 } // (class)

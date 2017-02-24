@@ -1,6 +1,8 @@
 package org.nodel.discovery;
 
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.nodel.diagnostics.AtomicLongMeasurementProvider;
@@ -12,7 +14,7 @@ public class Discovery {
     /**
      * IPv4 multicast group
      */
-    public static final String MDNS_GROUP = "224.0.0.252";
+    public static final InetAddress MDNS_GROUP = parseNumericalIPAddress("224.0.0.252");
 
     /**
      * IPv6 multicast group (not used here but reserved)
@@ -25,9 +27,27 @@ public class Discovery {
     public static final int MDNS_PORT = 5354;
     
     /**
+     * (as an InetSocketAddress (with port); will never be null)
+     */
+    public static final InetSocketAddress GROUP_SOCKET_ADDRESS = new InetSocketAddress(MDNS_GROUP, Discovery.MDNS_PORT);
+    
+    
+    /**
      * (convenience)
      */
     public static InetAddress IPv4Loopback = parseNumericalIPAddress("127.0.0.1");
+    
+    /**
+     * (convenience)
+     */
+    private Random _random = new Random();
+    
+    /**
+     * Convenience package function.
+     */
+    public static Random random() {
+        return instance()._random;
+    }
 
     /**
      * (see public method)
