@@ -110,7 +110,7 @@ public class InterfaceAdvertiser {
                 multicastReceiverThreadMain();
             }
 
-        }, "recv_thread");
+        }, "probe_listener_thread");
         _multicastHandlerThread.setDaemon(true);
         _multicastHandlerThread.start();
     }
@@ -122,7 +122,7 @@ public class InterfaceAdvertiser {
         MulticastSocket socket = null;
 
         try {
-            _logger.info("Preparing socket. interface:{}, port:{}, group:{}", 
+            _logger.info("Preparing socket to listen for probes. interface:{}, port:{}, group:{}", 
                     (intf == null ? "default" : intf), (port == 0 ? "any" : port), Discovery.MDNS_GROUP);
             
             socket = new MulticastSocket(new InetSocketAddress(intf, port)); // (port '0' means any port)
@@ -348,7 +348,7 @@ public class InterfaceAdvertiser {
 
                     @Override
                     public void run() {
-                        sendMessage(_receiveSocket, _recipient, message);
+                        sendResponse(_receiveSocket, _recipient, message);
                     }
 
                 });
@@ -378,14 +378,11 @@ public class InterfaceAdvertiser {
     /**
      * Sends the message to a recipient 
      */
-    private void sendMessage(DatagramSocket socket, InetSocketAddress to, NameServicesChannelMessage message) {
-        if (isSameSocketAddress(socket, to))
-            _logger.info("Sending message. to=self, message={}", message);
-        else
-            _logger.info("Sending message. to={}, message={}", to, message);
+    private void sendResponse(DatagramSocket socket, InetSocketAddress to, NameServicesChannelMessage message) {
+         _logger.info("Sending probe response. to={}, message={}", to, message);
         
         if (socket == null) {
-            _logger.info("Not available yet; ignoring send request.");
+            _logger.info("Not available yet; ignoring probe request.");
             return;
         }
         
@@ -399,13 +396,8 @@ public class InterfaceAdvertiser {
         try {
             socket.send(packet);
             
-            if (to.getAddress().isMulticastAddress()) {
-                Discovery.s_multicastOutData.addAndGet(bytes.length);
-                Discovery.s_multicastOutOps.incrementAndGet();
-            } else {
-                Discovery.s_unicastOutData.addAndGet(bytes.length);
-                Discovery.s_unicastOutOps.incrementAndGet();
-            }
+            Discovery.s_unicastOutData.addAndGet(bytes.length);
+            Discovery.s_unicastOutOps.incrementAndGet();
 
         } catch (IOException exc) {
             if (!_enabled)
@@ -427,13 +419,10 @@ public class InterfaceAdvertiser {
      * Handles a complete packet from the socket.
      */
     private void handleIncomingMessage(InetSocketAddress from, NameServicesChannelMessage message) {
-        if (isSameSocketAddress(_receiveSocket, from))
-            _logger.info("Message arrived. from=self, message={}", message);
-        else
-            _logger.info("Message arrived. from={}, message={}", from, message);
-        
         // discovery request?
         if (message.discovery != null) {
+            _logger.info("Received probe packet. from={}, message={}", from, message);
+            
             // create a responder if one isn't already active
             
             if (Nodel.getTCPAddress() == null) {
@@ -452,6 +441,8 @@ public class InterfaceAdvertiser {
                     responder.start(delay);
                 }
             }
+        } else {
+            _logger.info("Received unexpected packet (expecting probe). from={}, message={}", from, message);            
         }
         
     } // (method)
@@ -466,18 +457,6 @@ public class InterfaceAdvertiser {
         }
         
         Stream.safeClose(_receiveSocket);
-    }
-    
-    /**
-     * Safely returns true if a packet has the same address and a socket. Used to determine its own socket.
-     */
-    private static boolean isSameSocketAddress(DatagramSocket socket, InetSocketAddress addr) {
-        if (socket == null || addr == null)
-            return false;
-        
-        SocketAddress socketAddr = socket.getLocalSocketAddress();
-        
-        return socketAddr != null && socketAddr.equals(addr);
     }
 
 }

@@ -6,7 +6,6 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MulticastSocket;
-import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -153,7 +152,7 @@ public class InterfaceDiscoverer {
                 unicastReceiverThreadMain();
             }
 
-        }, "recv_thread");
+        }, "probe_resp_recv_thread");
         _unicastHandlerThread.setDaemon(true);
         _unicastHandlerThread.start();
         
@@ -179,7 +178,7 @@ public class InterfaceDiscoverer {
         MulticastSocket socket = null;
 
         try {
-            _logger.info("Preparing socket. interface:{}, port:{}, group:{}", 
+            _logger.info("Preparing socket for sending multicast probes. interface:{}, port:{}, group:{} ttl:8", 
                     (intf == null ? "default" : intf), (port == 0 ? "any" : port), Discovery.MDNS_GROUP.getHostAddress());
             
             // in previous versions the interface was selected using constructor instead of 'socket.setInterface(intf)' 
@@ -189,6 +188,7 @@ public class InterfaceDiscoverer {
 
             // join the multicast group
             socket.joinGroup(Discovery.MDNS_GROUP);
+            socket.setTimeToLive(8);
 
             _logger.info("Ready. localAddr:{}", socket.getLocalSocketAddress());
 
@@ -306,7 +306,7 @@ public class InterfaceDiscoverer {
                 NameServicesChannelMessage message = NameServicesChannelMessage.parsePacket(dp);
 
                 // handle message
-                this.handleIncomingMessage((InetSocketAddress) dp.getSocketAddress(), message);
+                this.handleProbeResponse((InetSocketAddress) dp.getSocketAddress(), message);
                 
             } catch (Exception exc) {
                 if (!_enabled)
@@ -378,7 +378,7 @@ public class InterfaceDiscoverer {
 
             @Override
             public void run() {
-                sendMessage(_sendSocket, Discovery.GROUP_SOCKET_ADDRESS, message);
+                sendProbe(_sendSocket, Discovery.GROUP_SOCKET_ADDRESS, message);
             }
 
         });
@@ -387,14 +387,11 @@ public class InterfaceDiscoverer {
     /**
      * Sends the message to a recipient 
      */
-    private void sendMessage(DatagramSocket socket, InetSocketAddress to, NameServicesChannelMessage message) {
-        if (isSameSocketAddress(socket, to))
-            _logger.info("Sending message. to=self, message={}", message);
-        else
-            _logger.info("Sending message. to={}, message={}", to, message);
+    private void sendProbe(DatagramSocket socket, InetSocketAddress to, NameServicesChannelMessage message) {
+        _logger.info("Sending probe. to={}, message={}", to, message);
         
         if (socket == null) {
-            _logger.info("Socket not available yet; ignoring send request.");
+            _logger.info("Socket not available yet; ignoring probe request.");
             return;
         }
         
@@ -407,40 +404,35 @@ public class InterfaceDiscoverer {
         
         try {
             socket.send(packet);
-            
-            if (to.getAddress().isMulticastAddress()) {
-                Discovery.s_multicastOutData.addAndGet(bytes.length);
-                Discovery.s_multicastOutOps.incrementAndGet();
-            } else {
-                Discovery.s_unicastOutData.addAndGet(bytes.length);
-                Discovery.s_unicastOutOps.incrementAndGet();
-            }
+        
+            Discovery.s_multicastOutData.addAndGet(bytes.length);
+            Discovery.s_multicastOutOps.incrementAndGet();
 
         } catch (IOException exc) {
             if (!_enabled)
                 return;
             
             if (socket.isClosed())
-                _logger.info("send() ignored as socket is being recycled.");
+                _logger.info("sendProbe() ignored as socket is being recycled.");
             else
-                _logger.warn("send() failed. ", exc);
+                _logger.warn("sendProbe() failed. ", exc);
         }
     } // (method)
     
     /**
      * Handles a complete packet from the socket.
      */
-    private void handleIncomingMessage(InetSocketAddress from, NameServicesChannelMessage message) {
-        if (isSameSocketAddress(_sendSocket, from))
-            _logger.info("Message arrived. from=self, message={}", message);
-        else
-            _logger.info("Message arrived. from={}, message={}", from, message);
-        
+    private void handleProbeResponse(InetSocketAddress from, NameServicesChannelMessage message) {
         // discovery request?
         if (message.present != null && message.addresses != null) {
+            _logger.info("Probe response arrived. from={}, message={}", from, message);
+            
             for (String name : message.present ) {
                 _host.updateAdvertisement(name, message);
             }
+            
+        } else {
+            _logger.info("Received unexpected message; was expecting a probe response. msg:{}", message);
         }
         
     } // (method)
@@ -476,18 +468,6 @@ public class InterfaceDiscoverer {
         // release timers
         for (TimerTask timer : _timers)
             timer.cancel();
-    }
-    
-    /**
-     * Safely returns true if a packet has the same address and a socket. Used to determine its own socket.
-     */
-    private static boolean isSameSocketAddress(DatagramSocket socket, InetSocketAddress addr) {
-        if (socket == null || addr == null)
-            return false;
-        
-        SocketAddress socketAddr = socket.getLocalSocketAddress();
-        
-        return socketAddr != null && socketAddr.equals(addr);
     }
     
 }
