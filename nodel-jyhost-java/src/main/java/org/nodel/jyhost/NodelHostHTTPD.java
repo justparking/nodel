@@ -14,7 +14,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.NetworkInterface;
+import java.net.InetAddress;
 import java.net.UnknownServiceException;
 import java.util.AbstractMap;
 import java.util.Collection;
@@ -184,7 +184,7 @@ public class NodelHostHTTPD extends NanoHTTPD {
         TopologyMonitor.shared().addOnChangeHandler(new TopologyMonitor.ChangeHandler() {
 
             @Override
-            public void handle(List<NetworkInterface> appeared, List<NetworkInterface> disappeared) {
+            public void handle(List<InetAddress> appeared, List<InetAddress> disappeared) {
                 // do I/O in the background
                 ThreadPool.background().execute(new Runnable() {
 

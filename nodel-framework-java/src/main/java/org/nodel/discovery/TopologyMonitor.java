@@ -44,14 +44,14 @@ public class TopologyMonitor {
     /**
      * The last active ones.
      */
-    private Set<NetworkInterface> _lastActiveSet = new HashSet<NetworkInterface>();
+    private Set<InetAddress> _lastActiveSet = new HashSet<InetAddress>();
     
     /**
      * (see addChangeHandler())
      */
     public static interface ChangeHandler {
         
-        public void handle(List<NetworkInterface> appeared, List<NetworkInterface> disappeared);
+        public void handle(List<InetAddress> appeared, List<InetAddress> disappeared);
         
     }
 
@@ -152,23 +152,22 @@ public class TopologyMonitor {
      * (involves blocking I/O)
      */
     private void monitorInterfaces() {
-        Set<NetworkInterface> activeSet = new HashSet<>(4);
-        Set<InetAddress> activeAddresses = new HashSet<>(4);
+        Set<InetAddress> activeSet = new HashSet<>(4);
 
-        listValidInterfaces(activeSet, activeAddresses);
+        listValidInterfaces(activeSet);
 
         // new interfaces
-        List<NetworkInterface> newly = new ArrayList<NetworkInterface>(activeSet.size());
+        List<InetAddress> newly = new ArrayList<>(activeSet.size());
 
-        for (NetworkInterface newIntf : activeSet) {
+        for (InetAddress newIntf : activeSet) {
             if (!_lastActiveSet.contains(newIntf))
                 newly.add(newIntf);
         }
 
         // disappeared interfaces
-        List<NetworkInterface> gone = new ArrayList<NetworkInterface>(activeSet.size());
+        List<InetAddress> gone = new ArrayList<>(activeSet.size());
 
-        for (NetworkInterface lastActiveIntf : _lastActiveSet) {
+        for (InetAddress lastActiveIntf : _lastActiveSet) {
             if (!activeSet.contains(lastActiveIntf))
                 gone.add(lastActiveIntf);
         }
@@ -177,14 +176,14 @@ public class TopologyMonitor {
 
         // update 'last active' with new and old
 
-        for (NetworkInterface intf : newly) {
+        for (InetAddress intf : newly) {
             _lastActiveSet.add(intf);
             hasChanged = true;
 
             _logger.info("{}: interface appeared!", intf);
         }
 
-        for (NetworkInterface intf : gone) {
+        for (InetAddress intf : gone) {
             _lastActiveSet.remove(intf);
             hasChanged = true;
 
@@ -193,7 +192,7 @@ public class TopologyMonitor {
                 
         // do internal test first before notifying anyone
         if (hasChanged) {
-            _likelyPublicAddress = testForLikelyPublicAddress(activeAddresses);
+            _likelyPublicAddress = testForLikelyPublicAddress(activeSet);
             
             // and temporarily poll quicker again (might be general NIC activity)
             _pollingSlot = 0;
@@ -224,10 +223,10 @@ public class TopologyMonitor {
         // notify recently new handlers first of the full active set so they can synchronise their lists
         if (newHandlers != null) {
             // 'lastActiveSet' is only modified by one thread so thread-safe
-            List<NetworkInterface> activeList = new ArrayList<>(_lastActiveSet);
+            List<InetAddress> activeList = new ArrayList<>(_lastActiveSet);
 
             for (ChangeHandler handler : newHandlers)
-                handler.handle(activeList, Collections.<NetworkInterface>emptyList());
+                handler.handle(activeList, Collections.<InetAddress>emptyList());
         }
 
         // notify existing handlers of changes
@@ -263,7 +262,7 @@ public class TopologyMonitor {
     /**
      * Scans for 'up', non-loopback, multicast-supporting, network interfaces with at least one IPv4 address.
      */
-    private void listValidInterfaces(Set<NetworkInterface> refNicSet, Set<InetAddress> refAddrSet) {
+    private void listValidInterfaces(Set<InetAddress> refNicSet) {
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
 
@@ -272,19 +271,11 @@ public class TopologyMonitor {
                     if (!intf.supportsMulticast() || intf.isLoopback() || !intf.isUp())
                         continue;
 
-                    boolean valid = false;
-                    
                     // check for at least one IPv4 address and check loopback status again for good measure
                     for (InetAddress address : Collections.list(intf.getInetAddresses())) {
-                        if (address instanceof Inet4Address) {
-                            refAddrSet.add(address);
-                            valid = true;
-                        }
+                        if (address instanceof Inet4Address)
+                            refNicSet.add(address);
                     }
-
-                    // add to list if at least one IP4 address present
-                    if (valid)
-                        refNicSet.add(intf);
 
                 } catch (Exception exc) {
                     // skip this interface

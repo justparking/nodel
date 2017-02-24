@@ -1,6 +1,6 @@
 package org.nodel.core;
 
-import java.net.NetworkInterface;
+import java.net.InetAddress;
 
 /* 
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -214,12 +214,12 @@ public class NodelServers {
         Nodel.updateTCPAddress(String.format("tcp://%s:%s", TopologyMonitor.shared().getLikelyPublicAddress().getHostAddress(), port));
 
         // update on topology changes too
-
+        
         // NOTE: attachment can safely be permanent as Nodel Server never recycles.
         TopologyMonitor.shared().addOnChangeHandler(new TopologyMonitor.ChangeHandler() {
 
             @Override
-            public void handle(List<NetworkInterface> appeared, List<NetworkInterface> disappeared) {
+            public void handle(List<InetAddress> appeared, List<InetAddress> disappeared) {
                 Nodel.updateTCPAddress(String.format("tcp://%s:%s", TopologyMonitor.shared().getLikelyPublicAddress().getHostAddress(), port));
             }
 

@@ -12,7 +12,6 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MulticastSocket;
-import java.net.NetworkInterface;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -286,7 +285,7 @@ public class NodelAutoDNS extends AutoDNS {
         TopologyMonitor.shared().addOnChangeHandler(new TopologyMonitor.ChangeHandler() {
 
             @Override
-            public void handle(List<NetworkInterface> appeared, List<NetworkInterface> disappeared) {
+            public void handle(List<InetAddress> appeared, List<InetAddress> disappeared) {
                 if (_enabled && !_started) {
                     _started = true;
                     init();
@@ -351,7 +350,7 @@ public class NodelAutoDNS extends AutoDNS {
     /**
      * When the topology changes, reset the sockets to pick up the new public interface address
      */
-    protected void onTopologyChanged(List<NetworkInterface> appeared, List<NetworkInterface> disappeared) {
+    protected void onTopologyChanged(List<InetAddress> appeared, List<InetAddress> disappeared) {
         synchronized(_lock) {
             _logger.info("Topology change detected, will recycle sockets. appeared:{}, disappeared:%s", appeared, disappeared);
             
