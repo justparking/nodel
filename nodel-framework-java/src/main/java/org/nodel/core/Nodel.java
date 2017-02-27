@@ -223,7 +223,7 @@ public class Nodel {
     private static InetAddress interfaceToUse;
 
     /**
-     * Gets the interface that Nodel will bind to.
+     * Gets the interface that Nodel will bind to (or null if automatic binding should be done)
      */
     public static InetAddress getInterfaceToUse() {
         return interfaceToUse;
@@ -234,9 +234,6 @@ public class Nodel {
      */
     public static void setInterfaceToUse(InetAddress inetAddr) {
         interfaceToUse = inetAddr;
-        
-        // immediately update the MDNS interface
-        AutoDNS.setInterface(inetAddr);
     }
     
     /**
@@ -272,7 +269,26 @@ public class Nodel {
         }
         
         return filteredList;
-    }    
+    }
+    
+    /**
+     * (see public getter / setter)
+     */
+    private static int s_tcpPort = 0; // e.g. "tcp://IP_ADDR:PORT"
+
+    /**
+     * The TCP port (native Nodel) for this environment.
+     */
+    public static int getTCPPort() {
+        return s_tcpPort;
+    }
+    
+    /**
+     * Sets the TCP address for this environment.
+     */
+    public static void updateTCPPort(int port) {
+        s_tcpPort = port;
+    }
     
     /**
      * (see public getter / setter)
@@ -292,15 +308,37 @@ public class Nodel {
     public static void setHTTPPort(int value) {
         httpPort = value;
     }
-    
-    public static String s_httpAddress;
 
-    public static void updateHTTPAddress(String httpAddress) {
+    /**
+     * (see public getter / setter)
+     */
+    private static String s_httpAddress = String.format("http://127.0.0.1");
+    
+    /**
+     * (see public getter / setter)
+     */
+    private static String s_httpNodeAddress = String.format("http://127.0.0.1/node");
+
+    /**
+     * Updated by host environment.
+     */
+    public static void updateHTTPAddresses(String httpAddress, String httpNodeAddress) {
         s_httpAddress = httpAddress;
+        s_httpNodeAddress = httpNodeAddress;
     }
     
+    /**
+     * The server's HTTP address for this host environment.
+     */
     public static String getHTTPAddress() {
         return s_httpAddress;
+    }
+    
+    /**
+     * A node's HTTP address for this host environment.
+     */
+    public static String getHTTPNodeAddress() {
+        return s_httpNodeAddress;
     }
     
     /**
