@@ -95,6 +95,10 @@ public class NodelDiscoverer {
      * Constructor
      */
     public NodelDiscoverer(InetAddress intf) {
+        // use the ALL_INTERFACE (0.0.0.0) instead of loopback (which can be multicast limited)
+        if (intf.equals(TopologyWatcher.IPv4Loopback))
+            intf = TopologyWatcher.AllInterface;
+        
         String friendlyName = intf.getHostAddress().replace('.', '_');
         _logger = LoggerFactory.getLogger(this.getClass().getName() + "." + friendlyName);
         

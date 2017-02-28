@@ -47,7 +47,6 @@ import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
 import org.nodel.rest.EndpointNotFoundException;
 import org.nodel.rest.REST;
-import org.nodel.threading.ThreadPool;
 import org.python.core.Py;
 import org.python.core.PyCode;
 import org.python.core.PyException;
@@ -185,33 +184,34 @@ public class NodelHostHTTPD extends NanoHTTPD {
 
             @Override
             public void handle(List<InetAddress> appeared, List<InetAddress> disappeared) {
-                // do I/O in the background
-                ThreadPool.background().execute(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        updateAddresses();
-                    }
-
-                });
+                handleTopologyChange(appeared, disappeared);
             }
 
         });
     }
-    
+
     /**
      * When the interfaces topology changes, the public IP address might change too.
      */
-    private void updateAddresses() {
-        // and the full web-address
-        String publicIP = TopologyWatcher.shared().getLikelyPublicAddress().getHostAddress(); 
+    private void handleTopologyChange(List<InetAddress> appeared, List<InetAddress> disappeared) {
+        InetAddress[] addresses = TopologyWatcher.shared().getInterfaces();
         
-        String httpNodeAddress = String.format("http://%s:%s%s",publicIP , Nodel.getHTTPPort(), Nodel.getHTTPSuffix());
-        String httpAddress = String.format("http://%s:%s", publicIP, Nodel.getHTTPPort());
-        
-        Nodel.updateHTTPAddresses(httpAddress, httpNodeAddress);
-        
-        System.out.println("    (web interface available at " + Nodel.getHTTPAddress() + ")\n");
+        String[] httpAddresses = new String[addresses.length];
+        String[]  httpNodeAddresses = new String[addresses.length];
+
+        for (int a = 0; a < addresses.length; a++) {
+            httpAddresses[a] = String.format("http://%s:%s%s", addresses[a].getHostAddress(), Nodel.getHTTPPort(), Nodel.getHTTPSuffix());
+            httpNodeAddresses[a] = String.format("http://%s:%s", addresses[a].getHostAddress(), Nodel.getHTTPPort());
+        }
+
+        Nodel.updateHTTPAddresses(httpAddresses, httpNodeAddresses);
+
+        for (InetAddress newly : appeared) {
+            System.out.println("    (web interface available at " + String.format("http://%s:%s", newly.getHostAddress(), Nodel.getHTTPPort()) + ")\n");
+        }
+
+        for (InetAddress gone : disappeared)
+            System.out.println("    (" + gone.getHostAddress() + " interface disappeared)");
     }
     
     /**

@@ -1,9 +1,7 @@
 package org.nodel.discovery;
 
-import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,7 +10,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.nodel.io.Stream;
 import org.nodel.threading.ThreadPool;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
@@ -82,8 +79,11 @@ public class TopologyWatcher {
      * (only modified by one thread)
      */
     private List<ChangeHandler> _onChangeHandlers = new ArrayList<ChangeHandler>();
-
-    private InetAddress _likelyPublicAddress = IPv4Loopback;
+    
+    /**
+     * The snapshot of the active interfaces list.
+     */
+    private InetAddress[] _interfacesSnapshot;
 
     /**
      * Adds a callback for topology changes (order is "new interfaces", "old interfaces")
@@ -168,8 +168,8 @@ public class TopologyWatcher {
 
         // add the *ALL_INTERFACES* if no interfaces present
         if (activeSet.size() == 0)
-            activeSet.add(AllInterface);
-
+            activeSet.add(IPv4Loopback);
+        
         // new interfaces
         List<InetAddress> newly = new ArrayList<>(activeSet.size());
 
@@ -206,7 +206,8 @@ public class TopologyWatcher {
                 
         // do internal test first before notifying anyone
         if (hasChanged) {
-            _likelyPublicAddress = testForLikelyPublicAddress(activeSet);
+            // update the snapshot
+            _interfacesSnapshot = activeSet.toArray(new InetAddress[activeSet.size()]);
             
             // and temporarily poll quicker again (might be general NIC activity)
             _pollingSlot = 0;
@@ -301,50 +302,11 @@ public class TopologyWatcher {
     }
     
     /**
-     * Returns the likely public address given the detected topology.
-     * (returns immediately)
+     * Returns the last snapshot of the interfaces.
      */
-    public InetAddress getLikelyPublicAddress() {
-        return _likelyPublicAddress;
-    }
-
-    
-    /**
-     * This special method ('hack') returns the likely 'public' interface address. It's the most convenient way in Java
-     * to interrogate the IP routing table when multiple network interfaces are present.
-     * 
-     * It uses a UDP socket to test the table. Unfortunately, OSX requires that a packet
-     * is actually sent before the interface can be determined. All other OSs do not.
-     * 
-     * Should be called when a topology change is detected.
-     */
-    private static InetAddress testForLikelyPublicAddress(Set<InetAddress> nics) {
-        final String[] DEFAULT_TESTS = new String[] { "8.8.8.8",         // when a default gateway exists
-                                                      "255.255.255.255", // when subnet routing exists
-                                                      "127.0.0.1" };     // when only a loopback exists
-        InetAddress result = null;
-
-        // go through each target and test against each interface
-        for (String target : DEFAULT_TESTS) {
-            for (InetAddress intfAddr : nics) {
-                DatagramSocket ds = null;
-                try {
-                    ds = new DatagramSocket(new InetSocketAddress(intfAddr, 0));
-                    ds.connect(new InetSocketAddress(target, 88)); // (port 88 is arbitrary)
-
-                    return intfAddr;
-
-                } catch (Exception exc) {
-                    // keep trying;
-
-                } finally {
-                    Stream.safeClose(ds);
-                }
-            }
-        }
-
-        return result != null ? result : IPv4Loopback;
-    } // (method)
+    public InetAddress[] getInterfaces() {
+        return _interfacesSnapshot;
+    }    
     
     /**
      * Warning with suppression.
@@ -352,5 +314,5 @@ public class TopologyWatcher {
     private void warn(String category, String msg, Exception exc) {
         _logger.warn(msg, exc);
     }
-
+    
 }

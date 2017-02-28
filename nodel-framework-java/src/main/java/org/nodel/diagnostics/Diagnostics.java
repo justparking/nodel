@@ -200,9 +200,9 @@ public class Diagnostics {
         return Nodel.getHostingRule();
     }
 
-    @Value(name = "httpAddress", title = "HTTP address", desc = "The address of the HTTP server.")
-    public String httpAddress() {
-        return Nodel.getHTTPAddress();
+    @Value(name = "httpAddresses", title = "HTTP address", desc = "The address of the HTTP server.")
+    public String[] httpAddresses() {
+        return Nodel.getHTTPAddresses();
     }
 
     @Service(name = "gc", title = "Garbage collect", desc = "Perform a 'garbage collect' operation; not necessarily stable.")

@@ -312,33 +312,33 @@ public class Nodel {
     /**
      * (see public getter / setter)
      */
-    private static String s_httpAddress = String.format("http://127.0.0.1");
+    private static String[] s_httpAddresses = new String[] { String.format("http://127.0.0.1") };
     
     /**
      * (see public getter / setter)
      */
-    private static String s_httpNodeAddress = String.format("http://127.0.0.1/node");
+    private static String[] s_httpNodeAddresses = new String[] { String.format("http://127.0.0.1/node") };
 
     /**
      * Updated by host environment.
      */
-    public static void updateHTTPAddresses(String httpAddress, String httpNodeAddress) {
-        s_httpAddress = httpAddress;
-        s_httpNodeAddress = httpNodeAddress;
+    public static void updateHTTPAddresses(String[] httpAddress, String[] httpNodeAddress) {
+        s_httpAddresses = httpAddress;
+        s_httpNodeAddresses = httpNodeAddress;
     }
     
     /**
      * The server's HTTP address for this host environment.
      */
-    public static String getHTTPAddress() {
-        return s_httpAddress;
+    public static String[] getHTTPAddresses() {
+        return s_httpAddresses;
     }
     
     /**
      * A node's HTTP address for this host environment.
      */
-    public static String getHTTPNodeAddress() {
-        return s_httpNodeAddress;
+    public static String[] getHTTPNodeAddress() {
+        return s_httpNodeAddresses;
     }
     
     /**
