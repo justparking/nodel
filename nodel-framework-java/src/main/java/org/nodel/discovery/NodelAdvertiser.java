@@ -16,6 +16,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import org.nodel.Environment;
 import org.nodel.Exceptions;
 import org.nodel.Threads;
 import org.nodel.core.Nodel;
@@ -164,7 +165,9 @@ public class NodelAdvertiser {
             boolean timedOut = false;
 
             try {
-                socket = new MulticastSocket(new InetSocketAddress(_intf, Discovery.MDNS_PORT));
+             // Environment needed because MacOS handles multicast construction quite differently
+                socket = Environment.instance().createMulticastSocket(new InetSocketAddress(_intf, Discovery.MDNS_PORT));
+                
                 socket.setSoTimeout(5 * 60000);
                 socket.setReuseAddress(true);
                 socket.setTimeToLive(TTL);

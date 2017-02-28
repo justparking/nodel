@@ -1,5 +1,7 @@
 package org.nodel;
 
+import java.io.IOException;
+
 /* 
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,10 +9,15 @@ package org.nodel;
  */
 
 import java.lang.reflect.Method;
+import java.net.InetSocketAddress;
+import java.net.MulticastSocket;
 import java.util.List;
+import java.util.Locale;
+
+import org.nodel.io.Stream;
 
 /**
- * Some utility methods related to the Java environment.
+ * Some utility methods related to the Java environment and OS its running on.
  */
 public class Environment {
     
@@ -31,6 +38,22 @@ public class Environment {
      * string name = ManagementFactory.getRuntimeMXBean().getName() 
      */
     private Method _getNameMethod;
+    
+    public enum OSType {
+        Windows, MacOS, Linux, Other
+    };
+    
+    /**
+     * (see public getter)
+     */
+    private OSType _os;
+    
+    /**
+     * An educated guess of the operating system.
+     */
+    public OSType getOperatingSystemType() {
+        return this._os;
+    }    
     
     /**
      * Ensures all the late binding only occurs once.
@@ -53,8 +76,10 @@ public class Environment {
         } catch (Exception exc) {
             // ignore
         }
+        
+        _os = guessOS();
     }
-    
+
     /**
      * (singleton)
      */
@@ -113,6 +138,58 @@ public class Environment {
         } catch (Exception exc) {
             return 0;
         }
+    }
+    
+    /**
+     * On OSX, Multicast creation using the constructor and interface parameter does not behave like on 
+     * Windows or Linux. A "cannot assign address" exception is common.
+     * 
+     * The workaround is to use '.setInterface' after construction instead. But on Windows this does not 
+     * explicitly bind to the given interface. It's the constructor, MulticastSocket(SocketAddress), that's what properly 
+     * binds to a given interface (and not just 0.0.0.0).
+     */
+    public MulticastSocket createMulticastSocket(InetSocketAddress socketAddress) throws IOException {
+        MulticastSocket ms = null;
+
+        try {
+            if (_os == OSType.MacOS) {
+                // do a special workaround for MacOS
+                ms = new MulticastSocket(socketAddress.getPort());
+                ms.setInterface(socketAddress.getAddress());
+                
+            } else {
+                // all other operating systems
+                ms = new MulticastSocket(socketAddress);
+                
+            }
+            
+        } catch (Exception exc) {
+            // ensure entire socket is closed if any exception is thrown
+            Stream.safeClose(ms);
+            
+            throw exc;
+        }
+        
+        return ms;
+    }
+    
+    /**
+     * (adapted from http://stackoverflow.com/questions/228477/how-do-i-programmatically-determine-operating-system-in-java)
+     * (static convenience)
+     */
+    private static OSType guessOS() {
+        String os = System.getProperty("os.name", "generic").toLowerCase(Locale.ENGLISH);
+        if ((os.indexOf("mac") >= 0) || (os.indexOf("darwin") >= 0))
+            return OSType.MacOS;
+
+        else if (os.indexOf("win") >= 0)
+            return OSType.Windows;
+
+        else if (os.indexOf("nux") >= 0)
+            return OSType.Linux;
+
+        else
+            return OSType.Other;
     }
 
 } // (class)

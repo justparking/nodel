@@ -12,6 +12,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
+import org.nodel.Environment;
 import org.nodel.Exceptions;
 import org.nodel.Handler;
 import org.nodel.Threads;
@@ -136,7 +137,9 @@ public class NodelDiscoverer {
             boolean timedOut = false;
 
             try {
-                socket = new MulticastSocket(new InetSocketAddress(_intf, 0));
+                // Environment needed because MacOS handles multicast construction quite differently
+                socket = Environment.instance().createMulticastSocket(new InetSocketAddress(_intf, 0));
+                
                 socket.setSoTimeout(5 * 60000);
                 socket.setReuseAddress(true);
                 socket.setTimeToLive(TTL);
