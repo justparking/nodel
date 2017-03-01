@@ -138,7 +138,10 @@ public class NodelDiscoverer {
 
             try {
                 // Environment needed because MacOS handles multicast construction quite differently
-                socket = Environment.instance().createMulticastSocket(new InetSocketAddress(_intf, 0));
+                // socket = Environment.instance().createMulticastSocket(new InetSocketAddress(_intf, 0));
+                
+                socket = new MulticastSocket(0);
+                socket.setInterface(_intf);
                 
                 socket.setSoTimeout(5 * 60000);
                 socket.setReuseAddress(true);
@@ -186,9 +189,9 @@ public class NodelDiscoverer {
                         break;
 
                     if (timedOut)
-                        _logger.info("Socket timed out after a long period of silence; this could be normal but will reinitialise socket regardless...", exc);
+                        _logger.info("Socket timed out after a long period of silence; this could be normal but will reinitialise socket regardless... msg:{}", exc.getMessage());
                     else
-                        _logger.warn("Socket operation failed; will retry / reinit regardless...", exc);
+                        _logger.warn("Socket operation failed; this may occur during network topology transitions. Will retry / reinit regardless... msg:{}", exc.getMessage());
 
                     // stagger retry
                     Threads.waitOnSync(_lock, 1000);
