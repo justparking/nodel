@@ -166,10 +166,10 @@ public class TopologyWatcher {
 
         listValidInterfaces(activeSet);
 
-        // add the *ALL_INTERFACES* if no interfaces present
+        // add the IPv4 Loopback interface if no interfaces present
         if (activeSet.size() == 0)
             activeSet.add(IPv4Loopback);
-        
+
         // new interfaces
         List<InetAddress> newly = new ArrayList<>(activeSet.size());
 

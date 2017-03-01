@@ -96,10 +96,6 @@ public class NodelDiscoverer {
      * Constructor
      */
     public NodelDiscoverer(InetAddress intf) {
-        // use the ALL_INTERFACE (0.0.0.0) instead of loopback (which can be multicast limited)
-        if (intf.equals(TopologyWatcher.IPv4Loopback))
-            intf = TopologyWatcher.AllInterface;
-        
         String friendlyName = intf.getHostAddress().replace('.', '_');
         _logger = LoggerFactory.getLogger(this.getClass().getName() + "." + friendlyName);
         
@@ -199,7 +195,7 @@ public class NodelDiscoverer {
             }
         } // (outer while)
         
-        _logger.info("(thread has run to completion)");
+        _logger.info("This discovered has shutdown; thread has run to completion.");
     } // (method)
 
     /**
@@ -331,6 +327,8 @@ public class NodelDiscoverer {
         synchronized (_lock) {
             // clear flag
             _enabled = false;
+            
+            _lock.notifyAll();
         }
         
         Stream.safeClose(_socket);
