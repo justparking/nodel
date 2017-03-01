@@ -174,7 +174,7 @@ public class NodelDiscoverer {
                         throw exc;
                     }
                     
-                    Discovery.countIncomingPacket(dp);
+                    Discovery.countIncomingPacket(dp, true);
                     
                     enqueueForProcessing(dp);
                     

@@ -232,8 +232,8 @@ public class Discovery {
     /**
      * (diagnostics)
      */
-    public static void countIncomingPacket(DatagramPacket dp) {
-        if (dp.getAddress().isMulticastAddress()) {
+    public static void countIncomingPacket(DatagramPacket dp, boolean assumeMulticast) {
+        if (assumeMulticast || dp.getAddress().isMulticastAddress()) {
             s_multicastInData.addAndGet(dp.getLength());
             s_multicastInOps.incrementAndGet();
         } else {

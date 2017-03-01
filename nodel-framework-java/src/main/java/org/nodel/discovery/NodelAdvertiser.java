@@ -202,7 +202,7 @@ public class NodelAdvertiser {
                         throw exc;
                     }
                     
-                    Discovery.countIncomingPacket(dp);
+                    Discovery.countIncomingPacket(dp, true);
                     
                     enqueueForProcessing(dp);
                     
