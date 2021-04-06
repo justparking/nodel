@@ -323,20 +323,20 @@ public class ThreadLake {
     /**
      * Holds the back-ground thread-pool.
      */
-    private static ThreadLake s_background;
+    private static ThreadLake s_global;
 
     /**
      * Background thread-pool for low-priority tasks.
      * (singleton) 
      */
-    public static ThreadLake background() {
-        if (s_background == null) {
+    public static ThreadLake global() {
+        if (s_global == null) {
             synchronized(s_lock) {
-                if (s_background == null)
-                    s_background = new ThreadLake("Background", staticMaxThreads);
+                if (s_global == null)
+                    s_global = new ThreadLake("Global", staticMaxThreads);
             }
         }
-        return s_background;
+        return s_global;
     }
 
 }

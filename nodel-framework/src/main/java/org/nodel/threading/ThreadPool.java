@@ -1,8 +1,10 @@
 package org.nodel.threading;
 
+import org.nodel.diagnostics.*;
 import org.slf4j.*;
 
 import java.util.*;
+import java.util.concurrent.atomic.*;
 
 public class ThreadPool {
 
@@ -28,12 +30,36 @@ public class ThreadPool {
      */
     private final Queue<Runnable> _queue = new LinkedList<>();
 
+    /**
+     * (measurement only, locked around 'queue')
+     */
+    private long _operations = 0;
+
     public ThreadPool(String name, int capacity) {
         _name = name;
         _logger = LoggerFactory.getLogger(String.format("%s.%s", this.getClass().getName(), name));
         _capacity = capacity;
+
+        initCounters();
     }
 
+    private void initCounters() {
+        Diagnostics.shared().registerCounter(_name + " thread-pool.Ops", new MeasurementProvider() {
+            @Override
+            public long getMeasurement() {
+                return _operations;
+            }
+
+        }, true);
+        Diagnostics.shared().registerCounter(_name + " thread-pool.Active threads", new MeasurementProvider() {
+
+            @Override
+            public long getMeasurement() {
+                return _busy;
+            }
+
+        }, false);
+    }
 
     /**
      * Applies a limited thread-pool capacity using an under-lying shared thread-pool
@@ -42,18 +68,18 @@ public class ThreadPool {
         // immediately indicate its busy
 
         synchronized (_queue) {
-            _busy += 1;
-
             _queue.add(runnable);
 
-            if (_busy > _capacity) {
+            if (_busy >= _capacity) {
                 // active/busy capacity exceeded, leave queue to be dealt with by active threads
                 return;
             }
+
+            _busy += 1;
         }
 
         // there is spare capacity, so execute on the thread-pool
-        ThreadLake.background().execute(new Runnable() {
+        ThreadLake.global().execute(new Runnable() {
 
             @Override
             public void run() {
@@ -63,10 +89,14 @@ public class ThreadPool {
                         nextToRun = _queue.poll();
 
                         if (nextToRun == null) {
-                            // all done, this thread not busy anymore
+                            // queue has been dealt with, indicate not busy any more and return
                             _busy -= 1;
                             return;
                         }
+
+                        _operations += 1;
+
+                        // ready to ready
                     }
 
                     try {
