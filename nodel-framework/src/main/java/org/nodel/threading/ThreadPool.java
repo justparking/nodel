@@ -4,7 +4,6 @@ import org.nodel.diagnostics.*;
 import org.slf4j.*;
 
 import java.util.*;
-import java.util.concurrent.atomic.*;
 
 public class ThreadPool {
 
@@ -40,10 +39,7 @@ public class ThreadPool {
         _logger = LoggerFactory.getLogger(String.format("%s.%s", this.getClass().getName(), name));
         _capacity = capacity;
 
-        initCounters();
-    }
-
-    private void initCounters() {
+        // initialise counters
         Diagnostics.shared().registerCounter(_name + " thread-pool.Ops", new MeasurementProvider() {
             @Override
             public long getMeasurement() {
@@ -51,11 +47,11 @@ public class ThreadPool {
             }
 
         }, true);
-        Diagnostics.shared().registerCounter(_name + " thread-pool.Active threads", new MeasurementProvider() {
+        Diagnostics.shared().registerCounter(_name + " thread-pool.Reserve", new MeasurementProvider() {
 
             @Override
             public long getMeasurement() {
-                return _busy;
+                return _capacity - _busy;
             }
 
         }, false);
@@ -79,7 +75,7 @@ public class ThreadPool {
         }
 
         // there is spare capacity, so execute on the thread-pool
-        ThreadLake.global().execute(new Runnable() {
+        GlobalThreadPool.global().execute(new Runnable() {
 
             @Override
             public void run() {
@@ -123,20 +119,56 @@ public class ThreadPool {
      */
     private static ThreadPool s_background;
 
-    private final static int DEFAULT_MAXTHREADS = 128;
-
     /**
      * Background thread-pool for low-priority tasks.
      * (singleton)
      */
     public static ThreadPool background() {
         if (s_background == null) {
-            synchronized(s_lock) {
+            synchronized (s_lock) {
                 if (s_background == null)
-                    s_background = new ThreadPool("Background", DEFAULT_MAXTHREADS);
+                    s_background = new ThreadPool("Background", 8);
             }
         }
         return s_background;
+    }
+
+    /**
+     * (see getter)
+     */
+    private static ThreadPool s_diskio;
+
+    /**
+     * For Disk IO
+     * (singleton)
+     */
+    public static ThreadPool diskio() {
+        if (s_diskio == null) {
+            synchronized (s_lock) {
+                if (s_diskio == null)
+                    s_diskio = new ThreadPool("Disk IO", 8);
+            }
+        }
+        return s_diskio;
+    }
+
+    /**
+     * (see getter)
+     */
+    private static ThreadPool s_networkio;
+
+    /**
+     * For network IO
+     * (singleton)
+     */
+    public static ThreadPool networkio() {
+        if (s_networkio == null) {
+            synchronized (s_lock) {
+                if (s_networkio == null)
+                    s_networkio = new ThreadPool("Network IO", 64);
+            }
+        }
+        return s_networkio;
     }
 
 }

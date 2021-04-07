@@ -23,12 +23,12 @@ import org.slf4j.LoggerFactory;
 /**
  * Contains thread-pool related utilities for the Nodel environment.
  */
-public class ThreadLake {
+public class GlobalThreadPool {
     
     /**
      * The default.
      */
-    private final static int DEFAULT_MAXTHREADS = 128;
+    private final static int DEFAULT_MAXTHREADS = 512;
     
     /**
      * (class-level lock)
@@ -118,14 +118,14 @@ public class ThreadLake {
     /**
      * Constructs an independent thread-pool.
      */
-    public ThreadLake(String name, int size, int timeout) {
+    public GlobalThreadPool(String name, int size, int timeout) {
         init(name, size, timeout);
     } // (init)
     
     /**
      * Constructs an independent thread-pool.
      */
-    public ThreadLake(String name, int size) {
+    public GlobalThreadPool(String name, int size) {
         init(name, size, -1);
     } // (init)    
     
@@ -138,6 +138,14 @@ public class ThreadLake {
         
         Diagnostics.shared().registerCounter(this.name + " thread-pool.Ops", this.readOnlyOperations, true);
         Diagnostics.shared().registerCounter(this.name + " thread-pool.Active threads", this.readOnlyInUse, false);
+        Diagnostics.shared().registerCounter(this.name + " thread-pool.Reserve", new MeasurementProvider() {
+
+            @Override
+            public long getMeasurement() {
+                return totalThreads.get() - threadsInUse.get();
+            }
+
+        }, false);
     }
     
     /**
@@ -198,7 +206,7 @@ public class ThreadLake {
                 if (this.totalThreads.get() >= this.maxThreads) {
                     if (!this.logged) {
                         this.logged = true;
-                        this.logger.info("Reached thread cap of {} for thread pool '{}'.", this.maxThreads, this.name);
+                        this.logger.warn("Reached thread cap of {} for thread pool '{}'.", this.maxThreads, this.name);
                     }
                     
                     // let the existing threads deal with it
@@ -323,17 +331,17 @@ public class ThreadLake {
     /**
      * Holds the back-ground thread-pool.
      */
-    private static ThreadLake s_global;
+    private static GlobalThreadPool s_global;
 
     /**
      * Background thread-pool for low-priority tasks.
      * (singleton) 
      */
-    public static ThreadLake global() {
+    public static GlobalThreadPool global() {
         if (s_global == null) {
             synchronized(s_lock) {
                 if (s_global == null)
-                    s_global = new ThreadLake("Global", staticMaxThreads);
+                    s_global = new GlobalThreadPool("Global", staticMaxThreads);
             }
         }
         return s_global;
