@@ -42,7 +42,7 @@ import org.nodel.io.UTF8Charset;
 import org.nodel.reflection.Reflection;
 import org.nodel.reflection.Serialisation;
 import org.nodel.rest.REST;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
@@ -83,7 +83,7 @@ public class NodelHost {
     /**
      * (threading)
      */
-    private ThreadPool _threadPool = new ThreadPool("Nodel host", 4);
+    private ThreadPond _threadPool = new ThreadPond("Nodel host", 4);
     
     /**
      * (threading)

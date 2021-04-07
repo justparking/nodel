@@ -3,6 +3,7 @@ package org.nodel.core;
 import org.nodel.diagnostics.Diagnostics;
 import org.nodel.diagnostics.LongSharableMeasurementProvider;
 import org.nodel.diagnostics.SharableMeasurementProvider;
+import org.nodel.threading.ThreadPond;
 
 /* 
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -15,6 +16,8 @@ import org.nodel.diagnostics.SharableMeasurementProvider;
  * of a networking stack.
  */
 public class LoopbackChannelServer extends ChannelServer {
+
+    private final static ThreadPond s_threadPool = new ThreadPond("Nodel Loopback-channel-server", 16);
     
     /**
      * Only need one of these for all send/receive client/server combinations as they're connected symmetrically.

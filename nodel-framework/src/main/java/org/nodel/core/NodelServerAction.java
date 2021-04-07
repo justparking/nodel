@@ -21,6 +21,7 @@ import org.nodel.reflection.Param;
 import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
 import org.nodel.threading.CallbackQueue;
+import org.nodel.threading.ThreadPond;
 
 public class NodelServerAction implements Closeable {
     
@@ -91,6 +92,22 @@ public class NodelServerAction implements Closeable {
     private Handler.F1<Object, Object> _callFilter = null;
 
     private boolean _closed;
+
+    /**
+     * (static fallback thread-pool)
+     */
+    protected final static ThreadPond s_threadPool = new ThreadPond("Nodel Channel Actions", 32);
+
+    private ThreadPond _threadPool;
+
+    public void setThreadPool(ThreadPond value) {
+        _threadPool = value;
+    }
+
+    private ThreadPond usingThreadPool() {
+        ThreadPond threadPool = _threadPool;
+        return threadPool != null ? threadPool : s_threadPool;
+    }
 
     public NodelServerAction(String node, String action, Binding metadata) {
         if (Strings.isBlank(node) || Strings.isBlank(action))
@@ -296,7 +313,7 @@ public class NodelServerAction implements Closeable {
             
             // if there are some handlers, use the Channel Client thread-pool (treat as though remote events)
             if (handlers != null) {
-                ChannelClient.getThreadPool().execute(new Runnable() {
+                usingThreadPool().execute(new Runnable() {
                     
                     @Override
                     public void run() {

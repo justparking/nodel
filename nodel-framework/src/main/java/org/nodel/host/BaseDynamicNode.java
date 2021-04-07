@@ -16,6 +16,7 @@ import org.nodel.core.NodelClientAction;
 import org.nodel.core.NodelClientEvent;
 import org.nodel.core.NodelServerAction;
 import org.nodel.core.NodelServerEvent;
+import org.nodel.threading.ThreadPond;
 
 /**
  * A base for a dynamic node, i.e. one which has dynamic actions and events.
@@ -87,6 +88,10 @@ public abstract class BaseDynamicNode extends BaseNode {
     public void injectRemoteEvent(NodelClientEvent event, SimpleName suggestedNode, SimpleName suggestedEvent) {
         super.prepareRemoteEvent(event, suggestedNode, suggestedEvent);
         super.addRemoteEvent(event);
+    }
+
+    public ThreadPond getThreadPool() {
+        return _threadPool;
     }
    
 }

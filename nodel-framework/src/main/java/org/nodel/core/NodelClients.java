@@ -31,7 +31,7 @@ import org.nodel.discovery.AdvertisementInfo.Addresses;
 import org.nodel.discovery.AutoDNS;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Value;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
@@ -69,12 +69,7 @@ public class NodelClients {
     /**
      * (threading)
      */
-    private ThreadPool _threadPool = new ThreadPool("Nodel client", 128);
-    
-    /**
-     * Thread pool for the handlers themselves.
-     */
-    private ThreadPool _threadPoolHandlers = new ThreadPool("Nodel client handlers", 256); 
+    private ThreadPond _threadPool = new ThreadPond("Nodel clients", 128);
     
     /**
      * (threading)
@@ -739,7 +734,7 @@ public class NodelClients {
 
                 // handlers may time take to return so needs to be threaded and invoked
                 // by thread pool for external handlers
-                _threadPoolHandlers.execute(new Runnable() {
+                handler.usingThreadPool().execute(new Runnable() {
 
                     @Override
                     public void run() {

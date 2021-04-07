@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.joda.time.DateTime;
+import org.nodel.Handler;
 import org.nodel.SimpleName;
 import org.nodel.Strings;
 import org.nodel.core.Nodel;
@@ -33,6 +34,7 @@ import org.nodel.diagnostics.Diagnostics;
 import org.nodel.discovery.AdvertisementInfo;
 import org.nodel.discovery.AutoDNS;
 import org.nodel.discovery.TopologyWatcher;
+import org.nodel.host.BaseDynamicNode;
 import org.nodel.host.BaseNode;
 import org.nodel.host.NanoHTTPD;
 import org.nodel.io.Stream;
@@ -47,6 +49,7 @@ import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
 import org.nodel.rest.EndpointNotFoundException;
 import org.nodel.rest.REST;
+import org.nodel.threading.ThreadPond;
 import org.python.core.Py;
 import org.python.core.PyCode;
 import org.python.core.PyException;
@@ -235,11 +238,12 @@ public class NodelHostHTTPD extends NanoHTTPD {
      * (all headers are stored by lower-case)
      */
     @Override
-    public Response serve(String uri, File root, String method, Properties params, Request request) {
+    public Response serve(String uri, File root, String method, Properties params, Request request, Handler.H1<Response> onComplete) {
         _logger.debug("Serving '" + uri + "'...");
 
         // if REST being used, the target object
         Object restTarget = _restModel;
+        ThreadPond threadPool = null;
 
         // get the user-agent
         String userAgent = request.headers.getProperty("user-agent");
@@ -256,6 +260,8 @@ public class NodelHostHTTPD extends NanoHTTPD {
             SimpleName nodeName = new SimpleName(parts[1]);
 
             BaseNode node = BaseNode.getNode(nodeName);
+            if (node instanceof BaseDynamicNode)
+                threadPool = ((BaseDynamicNode)node).getThreadPool();
 
             if (node == null)
                 return prepareNotFoundResponse(uri, "Node");
@@ -301,64 +307,90 @@ public class NodelHostHTTPD extends NanoHTTPD {
 
             parts = newParts;
 
-            try {
-                Object target;
+            String[] finalParts = parts;
+            Object finalRestTarget = restTarget;
 
-                if (method.equalsIgnoreCase("GET"))
-                    target = REST.resolveRESTcall(restTarget, parts, params, null);
+            Runnable runnable = new Runnable() {
 
-                else if (method.equalsIgnoreCase("POST"))
-                    target = REST.resolveRESTcall(restTarget, parts, params, request.raw);
+                @Override
+                public void run() {
+                    try {
+                        Object target;
 
-                else
-                    throw new UnknownServiceException("Unexpected method - '" + method + "'");
+                        if (method.equalsIgnoreCase("GET"))
+                            target = REST.resolveRESTcall(finalRestTarget, finalParts, params, null);
 
-                // check if the target is an HTTP directive
-                Response resp;
-                if (target instanceof Response) {
-                    resp = (Response) target;
+                        else if (method.equalsIgnoreCase("POST"))
+                            target = REST.resolveRESTcall(finalRestTarget, finalParts, params, request.raw);
 
-                } else {
-                    // otherwise serialise the target into JSON
-                    String targetAsJSON = Serialisation.serialise(target);
-                    resp = new Response(HTTP_OK, "application/json; charset=utf-8", targetAsJSON);
+                        else
+                            throw new UnknownServiceException("Unexpected method - '" + method + "'");
+
+                        // check if the target is an HTTP directive
+                        Response resp;
+                        if (target instanceof Response) {
+                            resp = (Response) target;
+
+                        } else {
+                            // otherwise serialise the target into JSON
+                            String targetAsJSON = Serialisation.serialise(target);
+                            resp = new Response(HTTP_OK, "application/json; charset=utf-8", targetAsJSON);
+                        }
+
+                        // adjust the response headers for script compatibility
+                        resp.addHeader("Access-Control-Allow-Origin", "*");
+
+                        onComplete.handle(resp);
+                        return;
+
+                    } catch (EndpointNotFoundException exc) {
+                        onComplete.handle(prepareExceptionMessageResponse(HTTP_NOTFOUND, exc, false));
+                        return;
+
+                    } catch (FileNotFoundException exc) {
+                        onComplete.handle(prepareExceptionMessageResponse(HTTP_NOTFOUND, exc, false));
+                        return;
+
+                    } catch (SerialisationException exc) {
+                        onComplete.handle(prepareExceptionMessageResponse(HTTP_INTERNALERROR, exc, params.containsKey("trace")));
+                        return;
+
+                    } catch (UnknownServiceException exc) {
+                        onComplete.handle(prepareExceptionMessageResponse(HTTP_INTERNALERROR, exc, false));
+                        return;
+
+                    } catch (PyException exc) {
+                        // use cleaner PyException stack trace
+                        _logger.warn("Python script exception during REST operation. {}", exc.toString());
+
+                        onComplete.handle(prepareExceptionMessageResponse(HTTP_INTERNALERROR, exc, params.contains("trace")));
+                        return;
+
+                    } catch (Exception exc) {
+                        _logger.warn("Unexpected exception during REST operation.", exc);
+
+                        onComplete.handle(prepareExceptionMessageResponse(HTTP_INTERNALERROR, exc, params.contains("trace")));
+                        return;
+                    }
                 }
 
-                // adjust the response headers for script compatibility
-                resp.addHeader("Access-Control-Allow-Origin", "*");
+            };
 
-                return resp;
+            if (threadPool != null)
+                threadPool.execute(runnable);
+            else
+                runnable.run();
 
-            } catch (EndpointNotFoundException exc) {
-                return prepareExceptionMessageResponse(HTTP_NOTFOUND, exc, false);
+            // will use onComplete callback instead
+            return null;
 
-            } catch (FileNotFoundException exc) {
-                return prepareExceptionMessageResponse(HTTP_NOTFOUND, exc, false);
-
-            } catch (SerialisationException exc) {
-                return prepareExceptionMessageResponse(HTTP_INTERNALERROR, exc, params.containsKey("trace"));
-
-            } catch (UnknownServiceException exc) {
-                return prepareExceptionMessageResponse(HTTP_INTERNALERROR, exc, false);
-                
-            } catch (PyException exc) {
-                // use cleaner PyException stack trace
-                _logger.warn("Python script exception during REST operation. {}", exc.toString());
-
-                return prepareExceptionMessageResponse(HTTP_INTERNALERROR, exc, params.contains("trace"));
-
-            } catch (Exception exc) {
-                _logger.warn("Unexpected exception during REST operation.", exc);
-
-                return prepareExceptionMessageResponse(HTTP_INTERNALERROR, exc, params.contains("trace"));
-            }
         } else {
             // TODO: this could be done a lot better:
             
             Response response = null;
             
             if (params.containsKey("_edit")) {
-                return super.serve("/editor.htm", root, method, params, request);
+                return super.serve("/editor.htm", root, method, params, request, onComplete);
                 
             } else if (params.containsKey("_source")) {
                 
@@ -399,14 +431,14 @@ public class NodelHostHTTPD extends NanoHTTPD {
             if (restTarget instanceof PyNode) {
                 if (uri.endsWith(".pysp"))
                     // try actual page 
-                    response = handlePySp((PyNode) restTarget, uri, root, method, params, request);
+                    response = handlePySp((PyNode) restTarget, uri, root, method, params, request, onComplete);
                 else
                     // try as '.pysp'
-                    response = handlePySp((PyNode) restTarget, uri + ".pysp", root, method, params, request);
+                    response = handlePySp((PyNode) restTarget, uri + ".pysp", root, method, params, request, onComplete);
             }
 
             if (response == null || HTTP_NOTFOUND.equals(response.status))
-                return super.serve(uri, root, method, params, request);
+                return super.serve(uri, root, method, params, request, onComplete);
 
             return response;
         }
@@ -577,10 +609,10 @@ public class NodelHostHTTPD extends NanoHTTPD {
      * @param node (pre-checked)
      * @return 
      */
-    private Response handlePySp(final PyNode node, String uri, File root, String method, Properties params, final Request request) {
+    private Response handlePySp(final PyNode node, String uri, File root, String method, Properties params, final Request request, Handler.H1<Response> onComplete) {
         // resolve the file
         // Note: the response will be HTTP_OK or some other error (content unchanged, partial requests etc. will never occur).
-        Response originalResponse = super.serve(uri, root, method, params, request, true);
+        Response originalResponse = super.serve(uri, root, method, params, request, true, onComplete);
         
         // only deal with things if an HTTP_OK is received
         if (!HTTP_OK.equalsIgnoreCase(originalResponse.status))

@@ -9,7 +9,8 @@ import org.nodel.Handler.H0;
 import org.nodel.Handler.H1;
 import org.nodel.host.BaseNode;
 import org.nodel.threading.CallbackQueue;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 import org.nodel.Threads;
@@ -38,7 +39,7 @@ public class RequestQueue implements Closeable {
     /**
      * The shared thread-pool
      */
-    private ThreadPool _threadPool;
+    private ThreadPond _threadPool;
     
     /**
      * The safe queue as provided by a host
@@ -113,7 +114,7 @@ public class RequestQueue implements Closeable {
     /**
      * (constructor)
      */
-    public RequestQueue(BaseNode node, H0 threadStateHandler, H1<Exception> callbackExceptionHandler, CallbackQueue callbackQueue, ThreadPool threadPool, Timers timers) {
+    public RequestQueue(BaseNode node, H0 threadStateHandler, H1<Exception> callbackExceptionHandler, CallbackQueue callbackQueue, ThreadPond threadPool, Timers timers) {
         _threadStateHandler = threadStateHandler;
         _callbackErrorHandler = callbackExceptionHandler;
         _callbackHandler = callbackQueue;

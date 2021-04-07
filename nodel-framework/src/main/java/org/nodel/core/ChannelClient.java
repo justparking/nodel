@@ -20,7 +20,7 @@ import org.nodel.SimpleName;
 import org.nodel.Tuple;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Value;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
@@ -36,14 +36,7 @@ public abstract class ChannelClient {
      */
     private static AtomicLong s_instance = new AtomicLong();
     
-    protected static ThreadPool s_threadPool = new ThreadPool("Nodel channel-clients", 128);
-
-    /**
-     * Returns the static thread-pool for in use by Channel Client related classes
-     */
-    public static ThreadPool getThreadPool() {
-        return s_threadPool;
-    }
+    protected static ThreadPond s_threadPool = new ThreadPond("Nodel Channel Client", 32);
 
     protected static Timers s_timerThread = new Timers("Nodel channel-clients");
 

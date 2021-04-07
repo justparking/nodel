@@ -29,6 +29,7 @@ import org.nodel.Threads;
 import org.nodel.core.Nodel;
 import org.nodel.discovery.NodelAutoDNS.ServiceItem;
 import org.nodel.io.Stream;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,8 @@ public class NodelAdvertiser {
      * (permanently latches false)
      */
     private volatile boolean _enabled = true;
+
+    protected final static ThreadPond s_threadPool = new ThreadPond("Discovery Advertiser", 2);
     
     /**
      * The incoming queue.
@@ -248,7 +251,7 @@ public class NodelAdvertiser {
             // the queue is being processed
             if (!_isProcessingQueue) {
                 _isProcessingQueue = true;
-                Discovery.threadPool().execute(_queueProcessor);
+                s_threadPool.execute(_queueProcessor);
             }
         }
     }
@@ -383,7 +386,7 @@ public class NodelAdvertiser {
             // (and only send if the 'present' list is not empty)
             
             if (message.present.size() > 0) {
-                Discovery.threadPool().execute(new Runnable() {
+                s_threadPool.execute(new Runnable() {
 
                     @Override
                     public void run() {

@@ -21,7 +21,7 @@ import org.nodel.io.Stream;
 import org.nodel.io.UTF8Charset;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Value;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 
@@ -45,7 +45,7 @@ public class QuickProcess implements Closeable {
     /**
      * (toolkit related)
      */
-    private ThreadPool _threadPool;
+    private ThreadPond _threadPool;
 
     /**
      * (toolkit related)
@@ -138,7 +138,7 @@ public class QuickProcess implements Closeable {
     /**
      * Constructs a new quick process.
      */
-    public QuickProcess(H0 threadStateHandler, ThreadPool threadPool, Timers timers, H1<Exception> callbackExceptionHandler,  BaseDynamicNode parentNode,
+    public QuickProcess(H0 threadStateHandler, ThreadPond threadPool, Timers timers, H1<Exception> callbackExceptionHandler,  BaseDynamicNode parentNode,
             List<String> command, String stdinPush, H1<Integer> onStarted, H1<FinishedArg> onFinished, long timeout, String working, boolean mergeErr, Map<String, String> env) {
         
         // validate command list

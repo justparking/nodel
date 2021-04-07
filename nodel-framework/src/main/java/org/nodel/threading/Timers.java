@@ -101,7 +101,7 @@ public class Timers {
     /**
      * A one-off timer whose task could be blocking so thread-pool can be used.
      */
-    public TimerTask schedule(ThreadPool threadPool, TimerTask task, long delay) {
+    public TimerTask schedule(ThreadPond threadPool, TimerTask task, long delay) {
         sharedTimer().schedule(createWrapper(task, threadPool), delay);
         
         return task;        
@@ -128,7 +128,7 @@ public class Timers {
     /**
      * Use for a repeating timer.
      */
-    public TimerTask schedule(ThreadPool threadPool, TimerTask task, long delay, long period) {
+    public TimerTask schedule(ThreadPond threadPool, TimerTask task, long delay, long period) {
         sharedTimer().schedule(createWrapper(task, threadPool), delay, period);
         
         return task;
@@ -164,7 +164,7 @@ public class Timers {
     /**
      * A convenience method to ensure unhandled exceptions are caught.
      */
-    private java.util.TimerTask createWrapper(final TimerTask task, final ThreadPool threadPool) {
+    private java.util.TimerTask createWrapper(final TimerTask task, final ThreadPond threadPool) {
         // set up the task entry-point at schedule time
         final Runnable runnable = new Runnable() {
             

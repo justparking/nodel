@@ -6,7 +6,7 @@ import java.io.IOException;
 import org.nodel.Handler.H0;
 import org.nodel.Handler.H1;
 import org.nodel.threading.CallbackQueue;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 
@@ -24,7 +24,7 @@ public class ManagedTimer implements Closeable {
     /**
      * A shared thread pool to use.
      */
-    private ThreadPool _threadPool;
+    private ThreadPond _threadPool;
 
     /**
      * When unhandled exceptions occur
@@ -77,7 +77,7 @@ public class ManagedTimer implements Closeable {
      */
     private H0 _threadStateHandler;
 
-    public ManagedTimer(H0 callback, boolean stoppedAtFirst, H0 threadStateHandler, Timers timerThreads, ThreadPool threadPool, H1<Exception> exceptionHandler, CallbackQueue callbackQueue) {
+    public ManagedTimer(H0 callback, boolean stoppedAtFirst, H0 threadStateHandler, Timers timerThreads, ThreadPond threadPool, H1<Exception> exceptionHandler, CallbackQueue callbackQueue) {
         _threadStateHandler = threadStateHandler;
         _timerThread = timerThreads;
         _threadPool = threadPool;

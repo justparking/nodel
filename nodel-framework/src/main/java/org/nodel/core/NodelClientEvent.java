@@ -20,20 +20,34 @@ import org.nodel.host.Binding;
 import org.nodel.reflection.Objects;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Value;
-import org.nodel.threading.CallbackQueue;
-import org.nodel.threading.ThreadPool;
-import org.nodel.threading.TimerTask;
-import org.nodel.threading.Timers;
+import org.nodel.threading.*;
+import org.nodel.threading.ThreadPond;
 
 public class NodelClientEvent {
     
     private final static SimpleName UNBOUND = new SimpleName("unbound");
-    
+
+    /**
+     * (static fallback thread-pool)
+     */
+    protected final static ThreadPond s_threadPool = new ThreadPond("Nodel Channel Events", 32);
+
+    private ThreadPond _threadPool;
+
+    public void setThreadPool(ThreadPond value) {
+        _threadPool = value;
+    }
+
+    public ThreadPond usingThreadPool() {
+        ThreadPond threadPool = _threadPool;
+        return threadPool != null ? threadPool : s_threadPool;
+    }
+
     /**
      * (background timers)
      */
     private static Timers s_timers = new Timers("_NodelClientEvent");
-    
+
     /**
      * The name (or alias) of this client event.
      */
@@ -179,7 +193,7 @@ public class NodelClientEvent {
         
         // add an ongoing timer to persist (on background thread-pool)
         // (not critical, so default is every 2 hours. Persist will occur on close anyway.)
-        _persisterTimer = s_timers.schedule(ThreadPool.background(), new TimerTask() {
+        _persisterTimer = s_timers.schedule(ThreadPond.diskio(), new TimerTask() {
 
             @Override
             public void run() {
@@ -375,7 +389,7 @@ public class NodelClientEvent {
 
         // treat the others as "wild"
         if (handlers.size() > 1) {
-            ChannelClient.getThreadPool().execute(new Runnable() {
+            usingThreadPool().execute(new Runnable() {
 
                 @Override
                 public void run() {

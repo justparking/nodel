@@ -24,6 +24,7 @@ import org.nodel.Handler;
 import org.nodel.Threads;
 import org.nodel.core.Nodel;
 import org.nodel.io.Stream;
+import org.nodel.threading.ThreadPond;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +42,8 @@ public class NodelDiscoverer {
      * The thread to receive the unicast responses data.
      */
     private Thread _thread;
+
+    protected final static ThreadPond s_threadPool = new ThreadPond("Discovery Discoverer", 2);
     
     /**
      * (permanently latches false)
@@ -215,7 +218,7 @@ public class NodelDiscoverer {
             // the queue is being processed
             if (!_isProcessingQueue) {
                 _isProcessingQueue = true;
-                Discovery.threadPool().execute(_queueProcessor);
+                s_threadPool.execute(_queueProcessor);
             }
         }
     }
@@ -288,7 +291,7 @@ public class NodelDiscoverer {
         message.types = typesList;
 
         // I/O is involved so use a thread-pool
-        Discovery.threadPool().execute(new Runnable() {
+        s_threadPool.execute(new Runnable() {
 
             @Override
             public void run() {

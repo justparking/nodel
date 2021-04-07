@@ -63,6 +63,7 @@ import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
 import org.nodel.threading.CallbackQueue;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.toolkit.Console;
 import org.nodel.toolkit.ManagedToolkit;
@@ -88,6 +89,8 @@ public class PyNode extends BaseDynamicNode {
      * operations.
      */
     private ReentrantLock _busy = new ReentrantLock();
+
+    private final static ThreadPond s_threadPool = new ThreadPond("PyNode", 8);
     
     /**
      * When permanently closed (disposed)

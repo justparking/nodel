@@ -25,17 +25,33 @@ import org.nodel.reflection.Param;
 import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
 import org.nodel.threading.CallbackQueue;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 
 public class NodelServerEvent implements Closeable {
+
+    /**
+     * (static fallback thread-pool)
+     */
+    protected final static ThreadPond s_threadPool = new ThreadPond("Nodel Server Events", 32);
+
+    private ThreadPond _threadPool;
+
+    public void setThreadPool(ThreadPond value) {
+        _threadPool = value;
+    }
+
+    private ThreadPond usingThreadPool() {
+        ThreadPond threadPool = _threadPool;
+        return threadPool != null ? threadPool : s_threadPool;
+    }
     
     /**
      * (background timers)
      */
     private static Timers s_timers = new Timers("_NodelServerEvent");
-    
+
     protected SimpleName _node;
     
     protected SimpleName _event;
@@ -206,7 +222,7 @@ public class NodelServerEvent implements Closeable {
         
         // add an ongoing timer to persist (on background thread-pool)
         // (not critical, so default is every 2 hours. Persist will occur on close anyway.)
-        _persisterTimer = s_timers.schedule(ThreadPool.background(), new TimerTask() {
+        _persisterTimer = s_timers.schedule(ThreadPond.diskio(), new TimerTask() {
 
             @Override
             public void run() {
@@ -346,7 +362,7 @@ public class NodelServerEvent implements Closeable {
         
         // if there are some handlers, use the Channel Client thread-pool (treat as though remote events)
         if (handlers.size() > 0) {
-            ChannelClient.getThreadPool().execute(new Runnable() {
+            usingThreadPool().execute(new Runnable() {
 
                 @Override
                 public void run() {

@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.nodel.Handler;
 import org.nodel.SimpleName;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +31,7 @@ public abstract class ChannelServer {
     /**
      * (threading)
      */
-    protected static ThreadPool s_threadPool = new ThreadPool("Nodel channel-servers", 128);
+    private static final ThreadPond s_threadPool = new ThreadPond("Nodel channel-servers", 128);
 
     /**
      * (logging)

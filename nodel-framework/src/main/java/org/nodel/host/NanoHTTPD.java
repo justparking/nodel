@@ -35,6 +35,7 @@ import java.io.FileOutputStream;
 
 import org.nodel.Base64;
 import org.nodel.DateTimes;
+import org.nodel.Handler;
 import org.nodel.diagnostics.CountableInputStream;
 import org.nodel.diagnostics.CountableOutputStream;
 import org.nodel.diagnostics.Diagnostics;
@@ -43,7 +44,7 @@ import org.nodel.io.Stream;
 import org.nodel.io.UTF8Charset;
 import org.nodel.io.UnexpectedIOException;
 import org.nodel.net.Credentials;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,13 +103,13 @@ public class NanoHTTPD {
     
     private static Object s_lock = new Object();
     
-    private static ThreadPool s_threadPool;
+    private static ThreadPond s_threadPool;
     
-    private static ThreadPool staticThreadPool() {
+    private static ThreadPond staticThreadPool() {
         if (s_threadPool == null) {
             synchronized(s_lock) {
                 if (s_threadPool == null)
-                    s_threadPool = new ThreadPool("Nano HTTP", 128);
+                    s_threadPool = new ThreadPond("Nano HTTP", 32);
             }
         }
         
@@ -141,14 +142,14 @@ public class NanoHTTPD {
      *            Header entries, percent decoded
      * @return HTTP response, see class Response for details
      */
-    public Response serve(String uri, File customRoot, String method, Properties parms, Request request) {
-        return serve(uri, customRoot, method, parms, request, false);
+    public Response serve(String uri, File customRoot, String method, Properties parms, Request request, Handler.H1<Response> onComplete) {
+        return serve(uri, customRoot, method, parms, request, false, onComplete);
     }
     
     /**
      * @param noFallback Ignores 'etag', partial responses and directory browsing. (None-standard NanoHTTP)
      */
-    public Response serve(String uri, File customRoot, String method, Properties parms, Request request, boolean noFallback) {
+    public Response serve(String uri, File customRoot, String method, Properties parms, Request request, boolean noFallback, Handler.H1<Response> onComplete) {
         Properties header = request.headers;
         Properties files = request.files;
 
@@ -499,11 +500,11 @@ public class NanoHTTPD {
 
         public void run() {
             long startTime = System.nanoTime();
-            
+
             String uri = null;
-            
+
             try {
-                InputStream is = null;
+                final InputStream is;
                 InputStream stream = this.mySocket.getInputStream();
                 
                 is = (stream == null ? null : new CountableInputStream(stream, SharableMeasurementProvider.Null.INSTANCE, s_dataRecvRate));
@@ -630,19 +631,42 @@ public class NanoHTTPD {
                 if (method.equalsIgnoreCase("PUT"))
                     files.put("content", saveTmpFile(fbuf, 0, f.size()));
 
+                final String usingUri = uri;
+                Handler.H1<Response> onComplete = new Handler.H1<Response>() {
+
+                    @Override
+                    public void handle(Response r) {
+                        try {
+                            if (r == null)
+                                sendError(HTTP_INTERNALERROR, "SERVER INTERNAL ERROR: Serve() returned a null response.");
+                            else
+                                sendResponse(r.status, r.mimeType, r.header, r.data);
+
+                            in.close();
+                            is.close();
+
+
+                            logger.debug("Finished serving (took {}). URI='{}'", DateTimes.formatPeriod(startTime), usingUri);
+                        } catch (IOException ioe) {
+                            try {
+                                logger.info(String.format("Serving failure (took %s). URI='%s'", DateTimes.formatPeriod(startTime), usingUri), ioe);
+
+                                sendError(HTTP_INTERNALERROR, "SERVER INTERNAL ERROR: IOException: " + ioe.getMessage());
+                            } catch (Throwable t) {
+                            }
+                        } catch (InterruptedException ie) {
+                            // Thrown by sendError, ignore and exit the thread.
+                        }
+                    }
+
+                };
+
                 // Ok, now do the serve()
-                Response r = serve(uri, null, method, parms, new Request(uri, method, parms, header, files, fbuf, this.mySocket));
-                if (r == null)
-                    sendError(HTTP_INTERNALERROR, "SERVER INTERNAL ERROR: Serve() returned a null response.");
-                else
-                    sendResponse(r.status, r.mimeType, r.header, r.data);
-                
-                in.close();
-                is.close();
-                
-                
-                logger.debug("Finished serving (took {}). URI='{}'", DateTimes.formatPeriod(startTime), uri);
-                
+                Response r = serve(uri, null, method, parms, new Request(uri, method, parms, header, files, fbuf, this.mySocket), onComplete);
+
+                if (r != null)
+                    onComplete.handle(r);
+
             } catch (IOException ioe) {
                 try {
                     logger.info(String.format("Serving failure (took %s). URI='%s'", DateTimes.formatPeriod(startTime), uri), ioe);

@@ -39,7 +39,7 @@ import org.nodel.reflection.Schema;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,10 +47,10 @@ import org.slf4j.LoggerFactory;
 public abstract class BaseNode implements Closeable {
     
     /**
-     * (threading)
+     * (on init)
      */
-    protected static ThreadPool s_threadPool = new ThreadPool("Dynamic nodes", 32);
-    
+    protected ThreadPond _threadPool;
+
     /**
      * (threading)
      */
@@ -205,7 +205,7 @@ public abstract class BaseNode implements Closeable {
         
         _root = root;
         _metaRoot = new File(_root, ".nodel");
-        
+
         // make the directory (don't care if it can or cannot)
         _metaRoot.mkdirs();
 
@@ -229,6 +229,8 @@ public abstract class BaseNode implements Closeable {
         _name = name;
         
         _logger = LoggerFactory.getLogger(String.format("%s_%d_%s", this.getClass().getName(), _instance, _name.getReducedName()));
+
+        _threadPool = new ThreadPond(_name.getReducedName() + " Node", 16);
         
         _outReader = new LineReader();
         _outReader.setHandler(new Handler.H1<String>() {

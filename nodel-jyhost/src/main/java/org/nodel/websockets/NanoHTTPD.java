@@ -73,7 +73,7 @@ import org.nodel.diagnostics.CountableInputStream;
 import org.nodel.diagnostics.CountableOutputStream;
 import org.nodel.diagnostics.Diagnostics;
 import org.nodel.diagnostics.SharableMeasurementProvider;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.websockets.NanoHTTPD.Response.IStatus;
 import org.nodel.websockets.NanoHTTPD.Response.Status;
 import org.slf4j.Logger;
@@ -145,7 +145,7 @@ public abstract class NanoHTTPD {
     /**
      * This thread-pool should be short-running tasks only, NOT for extended socket reads.
      */
-    protected static ThreadPool s_threadPool = new ThreadPool("NanoWebSocketServer", 128);
+    protected static ThreadPond s_threadPool = new ThreadPond("NanoWebSocketServer", 128);
     
     private static SharableMeasurementProvider s_dataRecvRate = Diagnostics.shared().registerSharableCounter("NanoWebSocketServer HTTP.Receive rate", true); 
 

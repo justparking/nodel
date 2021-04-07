@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Set;
 import org.nodel.Formatting;
 import org.nodel.core.Nodel;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
@@ -48,7 +48,7 @@ public class TopologyWatcher {
     /**
      * (convenience reference)
      */
-    private ThreadPool _threadPool = Discovery.threadPool();
+    private final static ThreadPond s_threadPool = new ThreadPond("Topology Watcher", 2);
     
     /**
      * (convenience reference)
@@ -170,7 +170,7 @@ public class TopologyWatcher {
      * fresh system boot-up sequence where interfaces may take some time to settle.
      */
     private void kickOffTimer() {
-        _timerThread.schedule(_threadPool, new TimerTask() {
+        _timerThread.schedule(s_threadPool, new TimerTask() {
 
             @Override
             public void run() {
@@ -180,7 +180,7 @@ public class TopologyWatcher {
                 tryMonitorInterfaces();
 
                 // then after a minute...
-                _timerThread.schedule(_threadPool, this, POLLING_INTERVALS[_pollingSlot]);
+                _timerThread.schedule(s_threadPool, this, POLLING_INTERVALS[_pollingSlot]);
             }
 
         }, 2000);

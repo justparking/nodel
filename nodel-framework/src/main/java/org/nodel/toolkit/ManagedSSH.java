@@ -26,7 +26,7 @@ import org.nodel.diagnostics.SharableMeasurementProvider;
 import org.nodel.host.BaseNode;
 import org.nodel.io.BufferBuilder;
 import org.nodel.threading.CallbackQueue;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPond;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
@@ -107,7 +107,7 @@ public class ManagedSSH implements Closeable {
     /**
      * The shared thread-pool
      */
-    private final ThreadPool _threadPool;
+    private final ThreadPond _threadPool;
 
     /**
      * The safe queue as provided by a host
@@ -346,7 +346,7 @@ public class ManagedSSH implements Closeable {
                       H0 threadStateHandler,
                       H1<Exception> callbackExceptionHandler,
                       CallbackQueue callbackQueue,
-                      ThreadPool threadPool,
+                      ThreadPond threadPool,
                       Timers timers) {
         _dest = dest;
 
