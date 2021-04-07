@@ -5,7 +5,7 @@ import org.slf4j.*;
 
 import java.util.*;
 
-public class ThreadPool {
+public class ThreadPond {
 
     /**
      * (logging)
@@ -34,7 +34,7 @@ public class ThreadPool {
      */
     private long _operations = 0;
 
-    public ThreadPool(String name, int capacity) {
+    public ThreadPond(String name, int capacity) {
         _name = name;
         _logger = LoggerFactory.getLogger(String.format("%s.%s", this.getClass().getName(), name));
         _capacity = capacity;
@@ -117,17 +117,17 @@ public class ThreadPool {
     /**
      * Holds the back-ground thread-pool.
      */
-    private static ThreadPool s_background;
+    private static ThreadPond s_background;
 
     /**
      * Background thread-pool for low-priority tasks.
      * (singleton)
      */
-    public static ThreadPool background() {
+    public static ThreadPond background() {
         if (s_background == null) {
             synchronized (s_lock) {
                 if (s_background == null)
-                    s_background = new ThreadPool("Background", 8);
+                    s_background = new ThreadPond("Background", 8);
             }
         }
         return s_background;
@@ -136,17 +136,17 @@ public class ThreadPool {
     /**
      * (see getter)
      */
-    private static ThreadPool s_diskio;
+    private static ThreadPond s_diskio;
 
     /**
      * For Disk IO
      * (singleton)
      */
-    public static ThreadPool diskio() {
+    public static ThreadPond diskio() {
         if (s_diskio == null) {
             synchronized (s_lock) {
                 if (s_diskio == null)
-                    s_diskio = new ThreadPool("Disk IO", 8);
+                    s_diskio = new ThreadPond("Disk IO", 8);
             }
         }
         return s_diskio;
@@ -155,17 +155,17 @@ public class ThreadPool {
     /**
      * (see getter)
      */
-    private static ThreadPool s_networkio;
+    private static ThreadPond s_networkio;
 
     /**
      * For network IO
      * (singleton)
      */
-    public static ThreadPool networkio() {
+    public static ThreadPond networkio() {
         if (s_networkio == null) {
             synchronized (s_lock) {
                 if (s_networkio == null)
-                    s_networkio = new ThreadPool("Network IO", 64);
+                    s_networkio = new ThreadPond("Network IO", 64);
             }
         }
         return s_networkio;
