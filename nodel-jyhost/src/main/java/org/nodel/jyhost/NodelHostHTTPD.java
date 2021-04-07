@@ -376,10 +376,22 @@ public class NodelHostHTTPD extends NanoHTTPD {
 
             };
 
-            if (threadPool != null)
-                threadPool.execute(runnable);
-            else
+            if (threadPool != null) {
+                // check for unbounded, potentially crippling operations
+                if (!threadPool.executeIfSafe(runnable)) {
+                    String warnMsg = "Thread-pool queue for '" + threadPool.getName() + "' was excessive; not submitting";
+                    _logger.warn(warnMsg);
+
+                    onComplete.handle(prepareExceptionMessageResponse(HTTP_INTERNALERROR, new RuntimeException(warnMsg), params.contains("trace")));
+                    return null;
+                }
+
+                // otherwise execution took place
+
+            } else {
+                // no thread-pool context available so use general one
                 runnable.run();
+            }
 
             // will use onComplete callback instead
             return null;

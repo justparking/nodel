@@ -7,12 +7,18 @@ import java.util.*;
 
 public class ThreadPond {
 
+    public final static int EXCESSIVE_COUNT = 2000;
+
     /**
      * (logging)
      */
     protected final Logger _logger;
 
     private final String _name;
+
+    public String getName() {
+        return _name;
+    }
 
     /**
      * Capacity of thread-pool
@@ -55,6 +61,21 @@ public class ThreadPond {
             }
 
         }, false);
+    }
+
+    /**
+     * Executes if the queue size is not excessive otherwise returns throws an Exception
+     */
+    public boolean executeIfSafe(final Runnable runnable) {
+        synchronized (_queue) {
+            int size = _queue.size();
+
+            if (size >= EXCESSIVE_COUNT)
+                return false;
+
+            execute(runnable);
+            return true;
+        }
     }
 
     /**
