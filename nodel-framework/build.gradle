@@ -54,5 +54,9 @@ dependencies {
 
     // SSH features
     implementation group: 'com.jcraft', name: 'jsch', version: '0.1.55'
+
+    // websocket features
+    implementation "org.java-websocket:Java-WebSocket:1.5.1"
+
 }
 
