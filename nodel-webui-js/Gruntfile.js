@@ -176,7 +176,9 @@ module.exports = function(grunt) {
           './node_modules/jquery.scrollbar/jquery.scrollbar.css',
           './node_modules/codemirror/lib/codemirror.css',
           './node_modules/codemirror/addon/dialog/dialog.css',
-          './temp/googlefonts.css'
+          './temp/googlefonts.css',
+          './src/spectrum/spectrum.css',
+          './src/spectrum/spectrum-dark.css'
         ],
         dest: './build/grunt/v1/css/components.css'
       },
@@ -188,7 +190,9 @@ module.exports = function(grunt) {
           './node_modules/jquery.scrollbar/jquery.scrollbar.css',
           './node_modules/codemirror/lib/codemirror.css',
           './node_modules/codemirror/addon/dialog/dialog.css',
-          './temp/googlefonts.css'
+          './temp/googlefonts.css',
+          './src/spectrum/spectrum.css',
+          './src/spectrum/spectrum-dark.css'
         ],
         dest: './build/grunt/v1/css/components.default.css'
       }
@@ -237,7 +241,8 @@ module.exports = function(grunt) {
           './node_modules/xxhashjs/build/xxhash.js',
           './node_modules/google-charts/dist/googleCharts.js',
           './temp/lodash.build.js',
-          './src/polyfill.js'
+          './src/polyfill.js',
+          './src/spectrum/spectrum.js'
         ],
         dest: './build/grunt/v1/js/components.js'
       }
