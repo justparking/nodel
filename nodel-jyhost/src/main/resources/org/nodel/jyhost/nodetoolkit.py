@@ -5,6 +5,9 @@ from sys import nodetoolkit
 # 
 # It contains convenience utilities and classes.
 
+# If integrating your own external libraries, please take note of the following:
+# TODO: fill this in
+
 # Represents a template for a local event
 def LocalEvent(schemaDictOrJSONorTitle = None):
     return schemaDictOrJSONorTitle;

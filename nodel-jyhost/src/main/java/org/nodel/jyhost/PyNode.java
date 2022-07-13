@@ -310,12 +310,31 @@ public class PyNode extends BaseDynamicNode {
         }
         
     };
+
+    /**
+     * For when external libraries manage their own threading: since thread-local storage is use per
+     * interpreter, each third-party managed thread needs to have the thread-state (context) "stamped" simply
+     * by executing this handler.
+     */
+    public H0 getThreadStateHandler() {
+        return _threadStateHandler;
+    }
+
+
     
     /**
      * A callback queue for orderly, predictable handling of callbacks.
      * (gets recycled)
      */
     private CallbackQueue _callbackQueue;
+
+    /**
+     * For when external libraries manage their own threading: this callback queue is shared with
+     * other sources to ensure best effort stable FIFO order with forced non-concurrent execution.
+     */
+    public CallbackQueue getCallbackQueue() {
+        return _callbackQueue;
+    }
 
     /**
      * The exception handler.
@@ -330,6 +349,14 @@ public class PyNode extends BaseDynamicNode {
         }
 
     };
+
+    /**
+     * Typically for third-party libraries that manage their own threading: any exception within threads should
+     * utilise this handler so that the console is used with the correct context information.
+     */
+    public H2<String, Exception> getExceptionHandler() {
+        return _exceptionHandler;
+    }
 
     /**
      * Provides context
