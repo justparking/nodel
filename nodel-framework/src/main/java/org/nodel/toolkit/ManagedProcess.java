@@ -322,15 +322,15 @@ public class ManagedProcess implements Closeable {
         _timerThread = timers;
         
         // set up the connect and receive thread
-        _thread = new Thread(new Runnable() {
+        _thread = new Thread(Threads.wrapPermanentThread(new Runnable() {
 
             @Override
             public void run() {
                 begin();
             }
             
-        });
-        _thread.setName(node.getName().getReducedName() + "_processLaunchAndReceive_" + _instance);
+        }));
+        _thread.setName("_mproc_launch_" + node.getName().getReducedName());
         _thread.setDaemon(true);
         
         // register the counters
@@ -792,7 +792,7 @@ public class ManagedProcess implements Closeable {
             BufferedInputStream biserr = new BufferedInputStream(new CountableInputStream(stderr, SharableMeasurementProvider.Null.INSTANCE, _counterStderrRate), 1024);
 
             // this is ugly, but a new thread has to be started otherwise polling has to be done
-            Thread thread = new Thread(new StderrHandler(biserr), _parentNode.getName().getReducedName() + "_stderr");
+            Thread thread = new Thread(Threads.wrapPermanentThread(new StderrHandler(biserr)), "proc_stderr_" + _parentNode.getName().getReducedName());
             thread.start();
 
             // (thread will gracefully stop after its associated process dies)

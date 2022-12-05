@@ -17,6 +17,7 @@ import java.net.Socket;
 import javax.net.SocketFactory;
 
 import org.nodel.DateTimes;
+import org.nodel.Threads;
 import org.nodel.diagnostics.CountableInputStream;
 import org.nodel.diagnostics.CountableOutputStream;
 import org.nodel.diagnostics.Diagnostics;
@@ -91,13 +92,13 @@ public class TCPChannelClient extends ChannelClient {
         super(address);
         
         // initialise a long running thread to read from the socket
-        _thread = new Thread(new Runnable() {
+        _thread = new Thread(Threads.wrapPermanentThread(new Runnable() {
             @Override
             public void run() {
                 TCPChannelClient.this.run();
             }
-        });
-        _thread.setName(String.format("ChannelClient%03d", this._instance));
+        }));
+        _thread.setName(String.format("chan_client_", this._instance));
         _thread.setDaemon(true);
     } // (constructor)
 

@@ -62,6 +62,7 @@ import org.nanohttpd.util.IFactoryThrowing;
 import org.nanohttpd.util.IHandler;
 
 import org.nodel.Base64;
+import org.nodel.Threads;
 import org.nodel.core.Nodel;
 import org.nodel.diagnostics.CountableInputStream;
 import org.nodel.diagnostics.CountableOutputStream;
@@ -1073,9 +1074,9 @@ public abstract class NanoHTTPD {
         this.myServerSocket.setReuseAddress(true);
 
         ServerRunnable serverRunnable = createServerRunnable(timeout);
-        this.myThread = new Thread(serverRunnable);
+        this.myThread = new Thread(Threads.wrapPermanentThread(serverRunnable));
         this.myThread.setDaemon(daemon);
-        this.myThread.setName("NanoHttpd Main Listener");
+        this.myThread.setName("nano_listen");
         this.myThread.start();
 
         while (!serverRunnable.hasBinded() && serverRunnable.getBindException() == null) {

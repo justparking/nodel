@@ -17,6 +17,7 @@ import org.nodel.diagnostics.AtomicIntegerMeasurementProvider;
 import org.nodel.diagnostics.AtomicLongMeasurementProvider;
 import org.nodel.diagnostics.Diagnostics;
 import org.nodel.diagnostics.MeasurementProvider;
+import org.nodel.diagnostics.SharableMeasurementProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,7 +79,12 @@ public class ThreadPool {
     /**
      * (read-only version)
      */
-    private MeasurementProvider readOnlyInUse = new AtomicIntegerMeasurementProvider(this.threadsInUse);    
+    private MeasurementProvider readOnlyInUse = new AtomicIntegerMeasurementProvider(this.threadsInUse);
+
+    /**
+     * (see related counter in 'Threads' class)
+     */
+    private static final SharableMeasurementProvider s_workersInUse = Diagnostics.shared().registerSharableCounter("Nodel Threading.Worker threads active", false);
     
     /**
      * Low water mark.
@@ -99,7 +105,7 @@ public class ThreadPool {
      * Read-only version of operations completed (stats)
      */
     private MeasurementProvider readOnlyOperations = new AtomicLongMeasurementProvider(this.operations);
-    
+
     /**
      * Holds all the work items.
      */
@@ -206,18 +212,19 @@ public class ThreadPool {
                 }
                 
                 // create the new thread
-                Thread thread = new Thread(new Runnable() {
+                Thread thread = new Thread(Threads.wrapWorkerThread(new Runnable() {
                     
                     @Override
                     public void run() {
                         threadMain();
                     }
                     
-                });
+                }));
                 
                 int total = this.totalThreads.incrementAndGet();
                 
                 this.threadsInUse.incrementAndGet();
+                s_workersInUse.incr();
                 
                 thread.setName("pool_" + this.name + "_" + (total - 1));
                 thread.setDaemon(true);
@@ -250,6 +257,7 @@ public class ThreadPool {
         
         // record that it's not in use
         this.threadsInUse.decrementAndGet();
+        s_workersInUse.decr();
         
         for (;;) {
             // holds the runnable
@@ -293,6 +301,7 @@ public class ThreadPool {
             
             // record that it's in use
             int threadsInUse = this.threadsInUse.incrementAndGet();
+            s_workersInUse.incr();
             
             Atomic.atomicMoreThanAndSet(threadsInUse, this.threadsInUse_high);
             
@@ -308,6 +317,7 @@ public class ThreadPool {
             
             // record it's not in use
             this.threadsInUse.decrementAndGet();
+            s_workersInUse.decr();
             
             Atomic.atomicLessThanAndSet(threadsInUse, this.threadsInUse_low);
             

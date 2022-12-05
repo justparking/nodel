@@ -9,6 +9,7 @@ package org.nodel.nodelhost;
 import org.apache.commons.daemon.Daemon;
 import org.apache.commons.daemon.DaemonContext;
 import org.apache.commons.daemon.DaemonInitException;
+import org.nodel.Threads;
 import org.nodel.jyhost.Launch;
 
 /**
@@ -73,14 +74,15 @@ public class Service implements Daemon {
         _nodelLaunch = _processArgs == null ? new Launch() : new Launch(_processArgs);
         
         // start a non-daemon thread
-        _thread = new Thread(new Runnable() {
+        _thread = new Thread(Threads.wrapPermanentThread(new Runnable() {
             
             @Override
             public void run() {
                 threadMain();
             }
             
-        });
+        }));
+        _thread.setName("daemon_service_keepalive");
         _thread.setPriority(Thread.MIN_PRIORITY);
         _thread.start();
     } // (method)

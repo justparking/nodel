@@ -127,15 +127,15 @@ public class ChannelServerSocket {
         _requestedPort = port;
 
         // initialise the thread
-        _thread = new Thread(new Runnable() {
+        _thread = new Thread(Threads.wrapPermanentThread(new Runnable() {
         	
             @Override
             public void run() {
                 ChannelServerSocket.this.run();
             }
             
-        });
-        _thread.setName(String.format("%s_%03d", this.getClass().getName(), _instance));
+        }));
+        _thread.setName(String.format("chan_serv_%d", _instance));
         _thread.setDaemon(true);
     } // (constructor)
 

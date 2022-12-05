@@ -6,6 +6,9 @@ package org.nodel;
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. 
  */
 
+import org.nodel.diagnostics.Diagnostics;
+import org.nodel.diagnostics.SharableMeasurementProvider;
+
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -232,8 +235,8 @@ public class Threads {
 
         @Override
         public void handle(Runnable runnable) {
-            Thread thread = new Thread(runnable);
-            thread.setName(String.format("nodeloneoff_%d", s_threadNumber.getAndIncrement()));
+            Thread thread = new Thread(Threads.wrapOneOffThread(runnable));
+            thread.setName(String.format("oneoff_%d", s_threadNumber.getAndIncrement()));
             thread.setDaemon(true);
             thread.start();
         }
@@ -319,5 +322,64 @@ public class Threads {
 
         return op;
     } // (method)
+
+    private static final SharableMeasurementProvider _counter_WorkerThreadsCreated;
+
+    private static final SharableMeasurementProvider _counter_WorkerThreadsAlive;
+
+    private static final SharableMeasurementProvider _counter_PermanentThreadsCreated;
+
+    private static final SharableMeasurementProvider _counter_PermanentThreadsAlive;
+
+    private static final SharableMeasurementProvider _counter_OneOffThreadsCreated;
+
+    private static final SharableMeasurementProvider _counter_OneOffThreadsAlive;
+
+    static {
+        _counter_WorkerThreadsCreated = Diagnostics.shared().registerSharableCounter("Nodel Threading.Work threads creation rate", true);
+        _counter_WorkerThreadsAlive = Diagnostics.shared().registerSharableCounter("Nodel Threading.Worker threads alive", false);
+        _counter_PermanentThreadsCreated = Diagnostics.shared().registerSharableCounter("Nodel Threading.Permanent thread creation rate", true);
+        _counter_PermanentThreadsAlive = Diagnostics.shared().registerSharableCounter("Nodel Threading.Permanent threads alive", false);
+        _counter_OneOffThreadsCreated = Diagnostics.shared().registerSharableCounter("Nodel Threading.One-off thread creation rate", true);
+        _counter_OneOffThreadsAlive = Diagnostics.shared().registerSharableCounter("Nodel Threading.One-off threads alive", false);
+    }
+
+    /**
+     * Wraps a runnable so its threading perf is counted
+     */
+    public static Runnable wrapWorkerThread(Runnable runnable) {
+        return wrapAsCountable(_counter_WorkerThreadsCreated, _counter_WorkerThreadsAlive, runnable);
+    }
+
+    /**
+     * Wraps a runnable so its threading perf is counted
+     */
+    public static Runnable wrapPermanentThread(Runnable runnable) {
+        return wrapAsCountable(_counter_PermanentThreadsCreated, _counter_PermanentThreadsAlive, runnable);
+    }
+
+    /**
+     * Wraps a runnable so its threading perf is counted
+     */
+    public static Runnable wrapOneOffThread(Runnable runnable) {
+        return wrapAsCountable(_counter_OneOffThreadsCreated, _counter_OneOffThreadsAlive, runnable);
+    }
+
+    private static Runnable wrapAsCountable(SharableMeasurementProvider created, SharableMeasurementProvider active, Runnable runnable) {
+        return new Runnable() {
+
+            @Override
+            public void run() {
+                created.incr();
+                active.incr();
+                try {
+                    runnable.run();
+                } finally {
+                    active.decr();
+                }
+            }
+
+        };
+    }
 
 } // (class)

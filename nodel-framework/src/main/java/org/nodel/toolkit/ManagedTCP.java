@@ -310,15 +310,15 @@ public class ManagedTCP implements Closeable {
         _timerThread = timers;
         
         // set up the connect and receive thread
-        _thread = new Thread(new Runnable() {
+        _thread = new Thread(Threads.wrapPermanentThread(new Runnable() {
 
             @Override
             public void run() {
                 begin();
             }
             
-        });
-        _thread.setName(node.getName().getReducedName() + "_tcpConnectAndReceive_" + _instance);
+        }));
+        _thread.setName("mtcp_" + node.getName().getReducedName());
         _thread.setDaemon(true);
         
         // register the counters
