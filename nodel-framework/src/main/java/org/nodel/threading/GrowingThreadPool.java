@@ -13,10 +13,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.nodel.Threads;
-import org.nodel.diagnostics.AtomicIntegerMeasurementProvider;
-import org.nodel.diagnostics.AtomicLongMeasurementProvider;
-import org.nodel.diagnostics.Diagnostics;
-import org.nodel.diagnostics.MeasurementProvider;
+import org.nodel.core.Nodel;
+import org.nodel.diagnostics.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,7 +82,11 @@ public class GrowingThreadPool implements ThreadPool {
      * Number of operations completed (stats)
      */
     private AtomicLong operations = new AtomicLong();
-    
+
+    private SharableMeasurementProvider _creations;
+
+    private SharableMeasurementProvider _created;
+
     /**
      * Read-only version of operations completed (stats)
      */
@@ -104,7 +106,7 @@ public class GrowingThreadPool implements ThreadPool {
      * Used to signal when threads have been created.
      */
     private Object creationSignal = new Object();
-    
+
     /**
      * Constructs an independent thread-pool.
      */
@@ -125,9 +127,10 @@ public class GrowingThreadPool implements ThreadPool {
         this.maxThreads = size;
         
         this.timeout = timeout;
-        
-        Diagnostics.shared().registerCounter(this.name + " thread-pool.Thread-pool ops", this.readOnlyOperations, true);
-        Diagnostics.shared().registerCounter(this.name + " thread-pool.Thread-pool active threads", this.readOnlyInUse, false);
+        _creations = Diagnostics.shared().registerSharableCounter(this.name + " thread-pool.Thread creations", true);
+        _created = Diagnostics.shared().registerSharableCounter(this.name + " thread-pool.Threads created", true);
+        Diagnostics.shared().registerCounter(this.name + " thread-pool.Ops", this.readOnlyOperations, true);
+        Diagnostics.shared().registerCounter(this.name + " thread-pool.Active threads", this.readOnlyInUse, false);
     }
     
     /**
@@ -179,13 +182,21 @@ public class GrowingThreadPool implements ThreadPool {
     private boolean logged = false;
 
     /**
+     * The last time growth occurred for throttling growth rate
+     */
+    private long _lastGrowth = 0;
+
+    private final static int PROCESSOR_COUNT = Runtime.getRuntime().availableProcessors();
+
+    /**
      * Grows the thread-pool synchronously
      */
     private void tryGrow() {
         if (this.growLock.tryLock()) {
             try {
                 // make sure the cap hasn't been  exceeded
-                if (this.totalThreads.get() >= this.maxThreads) {
+                int count = this.totalThreads.get();
+                if (count >= this.maxThreads) {
                     if (!this.logged) {
                         this.logged = true;
                         this.logger.info("Reached thread cap of {} for thread pool '{}'.", this.maxThreads, this.name);
@@ -194,6 +205,13 @@ public class GrowingThreadPool implements ThreadPool {
                     // let the existing threads deal with it
                     return;
                 }
+
+                long now = System.currentTimeMillis();
+                if (count > PROCESSOR_COUNT && (now - _lastGrowth) < 500)
+                    // don't allow growth of more than ~2 per second after the first few based on CPU core count
+                    return;
+
+                _lastGrowth = now;
                 
                 // create the new thread
                 Thread thread = new Thread(new Runnable() {
@@ -209,13 +227,15 @@ public class GrowingThreadPool implements ThreadPool {
                 
                 this.threadsInUse.incrementAndGet();
                 
-                thread.setName("pool_" + this.name + "_" + (total - 1));
+                thread.setName("Nworker" + (total - 1));
                 thread.setDaemon(true);
                 
                 synchronized(this.creationSignal) {
                     // kick off the new thread
                     thread.start();
-                    
+                    _creations.incr();
+                    _created.incr();
+
                     // wait until it has actually started
                     Threads.wait(this.creationSignal);
                 }
@@ -261,6 +281,8 @@ public class GrowingThreadPool implements ThreadPool {
                             this.logger.debug("This idle thread has been retired from its pool.");
 
                             this.logged = false;
+
+                            _created.decr();
 
                             return;
                         }

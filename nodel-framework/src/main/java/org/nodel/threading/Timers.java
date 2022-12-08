@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.nodel.Strings;
 import org.nodel.diagnostics.AtomicLongMeasurementProvider;
 import org.nodel.diagnostics.Diagnostics;
+import org.nodel.diagnostics.SharableMeasurementProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +59,7 @@ public class Timers {
     /**
      * Number of operations completed (stats)
      */
-    private AtomicLong operations = new AtomicLong();
+    private static SharableMeasurementProvider s_ticks = Diagnostics.shared().registerSharableCounter("N Framework.Timer ticks", true);
     
     /**
      * Constructs a new timer thread.
@@ -68,10 +69,6 @@ public class Timers {
             throw new IllegalArgumentException("The timer name cannot be empty; prefix with '_' to avoid registering with diagnostics framework.");
 
         this.name = name;
-        
-        // to avoid a class loading stack overflow, ignore call from Framework class.
-        if (name != null && !name.startsWith("_") && Diagnostics.shared() != null)
-            Diagnostics.shared().registerCounter(name + " timer.Ops", new AtomicLongMeasurementProvider(this.operations), true);
     } // (init)
     
     /**
@@ -183,7 +180,7 @@ public class Timers {
             public void run() {
                 try {
                     // for ops counting
-                    operations.incrementAndGet();
+                    s_ticks.incr();
                     
                     if (threadPool == null)
                         runnable.run();
