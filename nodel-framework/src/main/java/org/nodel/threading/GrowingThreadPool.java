@@ -128,7 +128,7 @@ public class GrowingThreadPool implements ThreadPool {
         
         this.timeout = timeout;
         _creations = Diagnostics.shared().registerSharableCounter(this.name + " thread-pool.Thread creations", true);
-        _created = Diagnostics.shared().registerSharableCounter(this.name + " thread-pool.Threads created", true);
+        _created = Diagnostics.shared().registerSharableCounter(this.name + " thread-pool.Threads created", false);
         Diagnostics.shared().registerCounter(this.name + " thread-pool.Ops", this.readOnlyOperations, true);
         Diagnostics.shared().registerCounter(this.name + " thread-pool.Active threads", this.readOnlyInUse, false);
     }
