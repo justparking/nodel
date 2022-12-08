@@ -35,7 +35,6 @@ import org.nodel.Strings;
 import org.nodel.Threads;
 import org.nodel.core.ActionRequestHandler;
 import org.nodel.core.BindingState;
-import org.nodel.core.Nodel;
 import org.nodel.core.NodelClientAction;
 import org.nodel.core.NodelClientEvent;
 import org.nodel.core.NodelEventHandler;
@@ -396,8 +395,8 @@ public class PyNode extends BaseDynamicNode {
         _scriptFile = new File(_root, "script.py");
         if (!_scriptFile.exists())
             Stream.writeFully(_scriptFile, ExampleScript.get());
-        
-        s_threadPool.execute(new Runnable() {
+
+        Threads.backgroundPool().execute(new Runnable() {
             
             @Override
             public void run() {
@@ -495,7 +494,7 @@ public class PyNode extends BaseDynamicNode {
             
         } finally {
             if (!_closed) {
-                s_timerThread.schedule(s_threadPool, new TimerTask() {
+                s_timerThread.schedule(Threads.backgroundPool(), new TimerTask() {
 
                     @Override
                     public void run() {

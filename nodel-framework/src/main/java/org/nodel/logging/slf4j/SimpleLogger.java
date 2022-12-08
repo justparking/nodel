@@ -17,11 +17,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.joda.time.DateTime;
 import org.nodel.DateTimes;
 import org.nodel.Formatting;
+import org.nodel.Threads;
 import org.nodel.io.Stream;
 import org.nodel.logging.Level;
 import org.nodel.logging.LogEntry;
 import org.nodel.logging.Logging;
-import org.nodel.threading.ThreadPool;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
@@ -311,7 +311,7 @@ public class SimpleLogger extends BaseLogger {
                 s_timers = new Timers("_SimpleLogger");
 
                 // schedule a disk space check in 30 sec (will reschedule at entry-point)
-                s_timers.schedule(ThreadPool.background(), new TimerTask() {
+                s_timers.schedule(Threads.backgroundPool(), new TimerTask() {
 
                     @Override
                     public void run() {
@@ -388,7 +388,7 @@ public class SimpleLogger extends BaseLogger {
             }
         } finally {
             // schedule a disk space check in 30 sec (will reschedule at entry-point)
-            s_timers.schedule(ThreadPool.background(), new TimerTask() {
+            s_timers.schedule(Threads.backgroundPool(), new TimerTask() {
 
                 @Override
                 public void run() {
@@ -564,7 +564,7 @@ public class SimpleLogger extends BaseLogger {
             synchronized (_fileLock) {
                 if (_maintenanceTimerTask == null) {
                     // schedule a maintenance operation in 1 min, then every 12 hours.
-                    _maintenanceTimerTask = s_timers.schedule(ThreadPool.background(), new TimerTask() {
+                    _maintenanceTimerTask = s_timers.schedule(Threads.backgroundPool(), new TimerTask() {
 
                         @Override
                         public void run() {

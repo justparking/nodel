@@ -13,21 +13,14 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.joda.time.DateTime;
-import org.nodel.Handler;
+import org.nodel.*;
 import org.nodel.Handler.H1;
-import org.nodel.LockFreeList;
-import org.nodel.Random;
-import org.nodel.SimpleName;
-import org.nodel.Strings;
 import org.nodel.host.Binding;
 import org.nodel.reflection.Objects;
 import org.nodel.reflection.Param;
 import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
-import org.nodel.threading.CallbackQueue;
-import org.nodel.threading.ThreadPool;
-import org.nodel.threading.TimerTask;
-import org.nodel.threading.Timers;
+import org.nodel.threading.*;
 
 public class NodelServerEvent implements Closeable {
     
@@ -206,7 +199,7 @@ public class NodelServerEvent implements Closeable {
         
         // add an ongoing timer to persist (on background thread-pool)
         // (not critical, so default is every 2 hours. Persist will occur on close anyway.)
-        _persisterTimer = s_timers.schedule(ThreadPool.background(), new TimerTask() {
+        _persisterTimer = s_timers.schedule(Threads.backgroundPool(), new TimerTask() {
 
             @Override
             public void run() {

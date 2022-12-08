@@ -14,6 +14,7 @@ import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.util.LinkedList;
 
+import org.nodel.Threads;
 import org.nodel.diagnostics.CountableInputStream;
 import org.nodel.diagnostics.CountableOutputStream;
 import org.nodel.diagnostics.Diagnostics;
@@ -75,6 +76,12 @@ public class TCPChannelServer extends ChannelServer {
         Diagnostics.shared().registerCounter("Nodel TCP server channels.Receives", s_dataInOpsCounter, true);
         Diagnostics.shared().registerCounter("Nodel TCP server channels.Sends", s_dataOutOpsCounter, true);
     }
+
+    /**
+     * If busy processing the outgoing message queue
+     * (locked around 'signal'
+     */
+    private boolean _busy = false;
     
     /**
      * Holds the outgoing message queue that is process by a separate thread.
@@ -93,7 +100,7 @@ public class TCPChannelServer extends ChannelServer {
         _socket = socket;
         
         // initialise the thread
-        _thread = new Thread(new Runnable() {
+        _thread = Threads.createLongThread("Ntcpchsrv", new Runnable() {
 
             @Override
             public void run() {
@@ -101,8 +108,6 @@ public class TCPChannelServer extends ChannelServer {
             }
 
         });
-        _thread.setName(String.format("channel_server_%d", this._instance));
-        _thread.setDaemon(true);
     } // (constructor)
 
     /**
@@ -119,19 +124,6 @@ public class TCPChannelServer extends ChannelServer {
 
             if (_thread == null)
                 throw new IllegalStateException("Already shutdown.");
-            
-            // kick of the message queue handler
-            Thread outgoingMessageQueueThread = new Thread(new Runnable() {
-                
-                @Override
-                public void run() {
-                    processOutgoingMessageQueue();
-                }
-                
-            });
-            outgoingMessageQueueThread.setName(String.format("tcp_channel_server_queue_%d", this._instance));
-            outgoingMessageQueueThread.setDaemon(true);
-            outgoingMessageQueueThread.start();
 
             try {
                 CountableInputStream input = new CountableInputStream(_socket.getInputStream(), s_dataInOpsCounter, s_dataInCounter);
@@ -175,30 +167,25 @@ public class TCPChannelServer extends ChannelServer {
     
     /**
      * Processes the message queue.
-     * (thread entry-point)
      */
     private void processOutgoingMessageQueue() {
-        try {
-            for (;;) {
-                ChannelMessage message = null;
-                synchronized (this._signal) {
-                    while (this._enabled && _outgoingMessageQueue.size() <= 0)
-                        this._signal.wait();
-                    
-                    if (!this._enabled)
-                        break;
-                    
-                    // must be at least one message in the queue
-                    message = _outgoingMessageQueue.removeFirst();
-                }
-                
-                doSendMessage(message);
-            } // (for)
-        } catch (InterruptedException exc) {
-            // (safe to bring down)
-        }
+        for (; ; ) {
+            ChannelMessage message = null;
+            synchronized (_signal) {
+                if (!_enabled)
+                    break;
 
-        this._logger.info("Thread run to completion.");
+                if (_outgoingMessageQueue.size() == 0) {
+                    _busy = false;
+                    return;
+                }
+
+                // must be at least one message in the queue
+                message = _outgoingMessageQueue.removeFirst();
+            }
+
+            doSendMessage(message);
+        } // (for)
     } // (method)
 
     /**
@@ -305,12 +292,22 @@ public class TCPChannelServer extends ChannelServer {
      */
     public void sendMessage(ChannelMessage message) {
         synchronized(this._signal) {
-            if (!this._enabled)
+            if (!_enabled)
                 return;
             
             _outgoingMessageQueue.addLast(message);
-            
-            this._signal.notifyAll();
+
+            if (!_busy) {
+                _busy = true;
+                s_threadPool.execute(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        processOutgoingMessageQueue();
+                    }
+
+                });
+            }
         }
     } // (method)
     

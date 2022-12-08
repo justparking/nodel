@@ -110,15 +110,14 @@ public class NodelDiscoverer {
         _intf = intf;
 
         // create the receiver thread and start it
-        _thread = new Thread(new Runnable() {
+        _thread = Threads.createLongThread("Ndiscdisc" + friendlyName, new Runnable() {
 
             @Override
             public void run() {
                 threadMain();
             }
 
-        }, friendlyName + "_probe_resp_receiver");
-        _thread.setDaemon(true);
+        });
     }
     
     /**

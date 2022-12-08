@@ -33,10 +33,7 @@ import org.nodel.net.NodelHTTPClient;
 import org.nodel.net.NodelHttpClientProvider;
 import org.nodel.reflection.Objects;
 import org.nodel.reflection.Serialisation;
-import org.nodel.threading.CallbackQueue;
-import org.nodel.threading.ThreadPool;
-import org.nodel.threading.TimerTask;
-import org.nodel.threading.Timers;
+import org.nodel.threading.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,9 +53,9 @@ public class ManagedToolkit {
     private static Timers s_timers = new Timers("Toolkit");
 
     /**
-     * The shared thread-pool.
+     * Thread-pool for use within this toolkit instance
      */
-    private static ThreadPool s_threadPool = new ThreadPool("Toolkit", 32);
+    private ThreadPool _threadPool;
     
     /**
      * (logging related)
@@ -221,6 +218,8 @@ public class ManagedToolkit {
      */
     public ManagedToolkit(BaseDynamicNode node) {
         _node = node;
+
+        _threadPool = _node.getThreadPool();
     }
     
     /**
@@ -275,7 +274,7 @@ public class ManagedToolkit {
                 throw new IllegalStateException("Node is closed.");
 
             final TimerEntry entry = new TimerEntry();
-            entry.timerTask = s_timers.schedule(s_threadPool, new TimerTask() {
+            entry.timerTask = s_timers.schedule(_threadPool, new TimerTask() {
 
                 @Override
                 public void run() {
@@ -342,7 +341,7 @@ public class ManagedToolkit {
                 throw new IllegalStateException("Node is closed.");
 
             // create a timer (will be stopped)
-            ManagedTimer timer = new ManagedTimer(func, stopped, _threadStateHandler, s_timers, s_threadPool, _timerExceptionHandler, _callbackQueue);
+            ManagedTimer timer = new ManagedTimer(func, stopped, _threadStateHandler, s_timers, _threadPool, _timerExceptionHandler, _callbackQueue);
             
             timer.setDelayAndInterval(delay, interval);
             
@@ -383,7 +382,7 @@ public class ManagedToolkit {
                                 String receiveDelimiters,
                                 String binaryStartStopFlags) {
         // create a new TCP connection providing this environment's facilities
-        ManagedTCP tcp = new ManagedTCP(_node, dest, _threadStateHandler, _tcpExceptionHandler, _callbackQueue, s_threadPool, s_timers);
+        ManagedTCP tcp = new ManagedTCP(_node, dest, _threadStateHandler, _tcpExceptionHandler, _callbackQueue, _threadPool, s_timers);
         
         // set up the callback handlers as provided by the user
         tcp.setConnectedHandler(onConnected);
@@ -411,7 +410,7 @@ public class ManagedToolkit {
                                 H2<String, String> onReceived, 
                                 H1<String> onSent,
                                 String intf) {
-        ManagedUDP udp = new ManagedUDP(_node, source, dest, _threadStateHandler, _udpExceptionHandler, _callbackQueue, s_threadPool, s_timers);
+        ManagedUDP udp = new ManagedUDP(_node, source, dest, _threadStateHandler, _udpExceptionHandler, _callbackQueue, _threadPool, s_timers);
         
         udp.setReadyHandler(onReady);
         udp.setReceivedHandler(onReceived);
@@ -443,7 +442,7 @@ public class ManagedToolkit {
                                 String password,
                                 boolean disableEcho) {
         // create a new TCP connection providing this environment's facilities
-        ManagedSSH ssh = new ManagedSSH(_node, dest, _threadStateHandler, _tcpExceptionHandler, _callbackQueue, s_threadPool, s_timers);
+        ManagedSSH ssh = new ManagedSSH(_node, dest, _threadStateHandler, _tcpExceptionHandler, _callbackQueue, _threadPool, s_timers);
 
         // set up the callback handlers as provided by the user
         ssh.setConnectedHandler(onConnected);
@@ -483,7 +482,7 @@ public class ManagedToolkit {
                                 String working,
                                 boolean mergestderr,
                                 Map<String, String> env) {
-        ManagedProcess process = new ManagedProcess(_node, command, _threadStateHandler, _processExceptionHandler, _callbackQueue, s_threadPool, s_timers);
+        ManagedProcess process = new ManagedProcess(_node, command, _threadStateHandler, _processExceptionHandler, _callbackQueue, _threadPool, s_timers);
         
         // set up the callback handlers as provided by the user
         process.setStartedHandler(onStarted);
@@ -524,7 +523,7 @@ public class ManagedToolkit {
             boolean mergeErr,
             Map<String, String> env) {
 
-        final QuickProcess quickProcess = new QuickProcess(_threadStateHandler, s_threadPool, s_timers, _processExceptionHandler, _node, command, stdinPush, onStarted, onFinished, timeout, working, mergeErr, env);
+        final QuickProcess quickProcess = new QuickProcess(_threadStateHandler, _threadPool, s_timers, _processExceptionHandler, _node, command, stdinPush, onStarted, onFinished, timeout, working, mergeErr, env);
         quickProcess.setClosedHandler(new Handler.H0() {
 
             @Override
@@ -556,7 +555,7 @@ public class ManagedToolkit {
                                 H1<Object> onReceived, 
                                 H0 onSent,
                                 H0 onTimeout) {
-        RequestQueue requestQueue = new RequestQueue(_node, _threadStateHandler, _requestQueueExceptionHandler, _callbackQueue, s_threadPool, s_timers);
+        RequestQueue requestQueue = new RequestQueue(_node, _threadStateHandler, _requestQueueExceptionHandler, _callbackQueue, _threadPool, s_timers);
         
         // set up the callback handlers as provided by the user
         requestQueue.setReceivedHandler(onReceived);

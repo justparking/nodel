@@ -112,7 +112,7 @@ public class Diagnostics {
                 }
 
             });
-            _thread.setName("nodel.diagnostics");
+            _thread.setName("Ndiagnostics");
             _thread.setDaemon(true);
             _thread.start();
         } catch (Exception exc) {

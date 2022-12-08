@@ -38,6 +38,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.nanohttpd.protocols.http.ClientHandler;
+import org.nodel.Threads;
 
 /**
  * Default threading strategy for NanoHTTPD.
@@ -82,9 +83,6 @@ public class DefaultAsyncRunner implements IAsyncRunner {
     }
 
     protected Thread createThread(ClientHandler clientHandler) {
-        Thread t = new Thread(clientHandler);
-        t.setDaemon(true);
-        t.setName("NanoHttpd Request Processor (#" + this.requestCount + ")");
-        return t;
+        return Threads.createLongThread("Nhttpdreq", clientHandler);
     }
 }

@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.nodel.Handler;
 import org.nodel.SimpleName;
+import org.nodel.Threads;
 import org.nodel.threading.ThreadPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,7 @@ public abstract class ChannelServer {
     /**
      * (threading)
      */
-    protected static ThreadPool s_threadPool = new ThreadPool("Nodel channel-servers", 128);
+    protected static ThreadPool s_threadPool = Threads.createFencedPool("Nodel channel-servers", 128);
 
     /**
      * (logging)
@@ -46,7 +47,7 @@ public abstract class ChannelServer {
     /**
      * Instance signal / lock.
      */
-    protected Object _signal = new Object();
+    protected final Object _signal = new Object();
 
     /**
      * Can only be enabled once. (not thread safe)

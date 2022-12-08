@@ -22,18 +22,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.nodel.DateTimes;
-import org.nodel.Handler;
-import org.nodel.Handlers;
-import org.nodel.SimpleName;
+import org.nodel.*;
 import org.nodel.discovery.AdvertisementInfo;
 import org.nodel.discovery.AdvertisementInfo.Addresses;
 import org.nodel.discovery.AutoDNS;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Value;
-import org.nodel.threading.ThreadPool;
-import org.nodel.threading.TimerTask;
-import org.nodel.threading.Timers;
+import org.nodel.threading.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,12 +64,12 @@ public class NodelClients {
     /**
      * (threading)
      */
-    private ThreadPool _threadPool = new ThreadPool("Nodel client", 128);
+    private ThreadPool _threadPool = Threads.createFencedPool("Nodel client", 128);
     
     /**
      * Thread pool for the handlers themselves.
      */
-    private ThreadPool _threadPoolHandlers = new ThreadPool("Nodel client handlers", 256); 
+    private ThreadPool _threadPoolHandlers = Threads.createFencedPool("Nodel client handlers", 256);
     
     /**
      * (threading)

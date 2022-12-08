@@ -127,7 +127,7 @@ public class ChannelServerSocket {
         _requestedPort = port;
 
         // initialise the thread
-        _thread = new Thread(new Runnable() {
+        _thread = Threads.createLongThread("Nchsrv" + port, new Runnable() {
         	
             @Override
             public void run() {
@@ -135,8 +135,6 @@ public class ChannelServerSocket {
             }
             
         });
-        _thread.setName(String.format("%s_%03d", this.getClass().getName(), _instance));
-        _thread.setDaemon(true);
     } // (constructor)
 
     /**

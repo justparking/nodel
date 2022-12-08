@@ -17,12 +17,11 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.nodel.Handler;
 import org.nodel.SimpleName;
+import org.nodel.Threads;
 import org.nodel.Tuple;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Value;
-import org.nodel.threading.ThreadPool;
-import org.nodel.threading.TimerTask;
-import org.nodel.threading.Timers;
+import org.nodel.threading.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +35,7 @@ public abstract class ChannelClient {
      */
     private static AtomicLong s_instance = new AtomicLong();
     
-    protected static ThreadPool s_threadPool = new ThreadPool("Nodel channel-clients", 128);
+    protected static ThreadPool s_threadPool = Threads.createFencedPool("Nodel channel-clients", 128);
 
     /**
      * Returns the static thread-pool for in use by Channel Client related classes

@@ -12,24 +12,38 @@ import java.io.IOException;
 import org.joda.time.DateTime;
 import org.nodel.Handler;
 import org.nodel.SimpleName;
+import org.nodel.Threads;
 import org.nodel.core.NodelClientAction;
 import org.nodel.core.NodelClientEvent;
 import org.nodel.core.NodelServerAction;
 import org.nodel.core.NodelServerEvent;
+import org.nodel.threading.ThreadPool;
 
 /**
  * A base for a dynamic node, i.e. one which has dynamic actions and events.
  */
 public abstract class BaseDynamicNode extends BaseNode {
-    
+
+    private ThreadPool _threadPool;
+
+    public ThreadPool getThreadPool() {
+        return _threadPool;
+    }
+
     public BaseDynamicNode(SimpleName name, File root) throws IOException {
         super(name, root);
+        init();
     }
-    
+
     public BaseDynamicNode(File root) throws IOException {
         super(root);
+        init();
     }
-    
+
+    private void init() {
+        _threadPool = Threads.createFencedPool("'" + _name.getReducedName() + "'", 10);
+    }
+
     /**
      * Injects log into this Node on behalf of another entity (override to prevent)
      */
@@ -88,5 +102,4 @@ public abstract class BaseDynamicNode extends BaseNode {
         super.prepareRemoteEvent(event, suggestedNode, suggestedEvent);
         super.addRemoteEvent(event);
     }
-   
 }

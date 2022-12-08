@@ -128,15 +128,14 @@ public class NodelAdvertiser {
         _httpAddress = "http://" + _intf.getHostAddress() + ":" + Nodel.getHTTPPort() + Nodel.getHTTPSuffix();
 
         // create the receiver thread and start it
-        _thread = new Thread(new Runnable() {
+        _thread = Threads.createLongThread("Ndiscrecv" + friendlyName, new Runnable() {
 
             @Override
             public void run() {
                 threadMain();
             }
 
-        }, friendlyName + "_probe_resp_receiver");
-        _thread.setDaemon(true);
+        });
     }
 
     /**

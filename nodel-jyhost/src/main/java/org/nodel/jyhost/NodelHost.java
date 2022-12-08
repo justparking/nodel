@@ -42,7 +42,6 @@ import org.nodel.io.UTF8Charset;
 import org.nodel.reflection.Reflection;
 import org.nodel.reflection.Serialisation;
 import org.nodel.rest.REST;
-import org.nodel.threading.ThreadPool;
 import org.nodel.threading.TimerTask;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
@@ -79,11 +78,6 @@ public class NodelHost {
      * (logging related)
      */
     protected Logger _logger = LoggerFactory.getLogger(this.getClass().getName() + "_" + s_instanceCounter.getAndIncrement());
-    
-    /**
-     * (threading)
-     */
-    private ThreadPool _threadPool = new ThreadPool("Nodel host", 4);
     
     /**
      * (threading)
@@ -375,7 +369,7 @@ public class NodelHost {
         
         // schedule a maintenance run into the future
         if (!_closed) {
-            _timerThread.schedule(_threadPool, new TimerTask() {
+            _timerThread.schedule(Threads.backgroundPool(), new TimerTask() {
                 
                 @Override
                 public void run() {

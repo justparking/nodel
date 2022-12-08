@@ -11,6 +11,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.nodel.Threads;
 import org.nodel.diagnostics.AtomicLongMeasurementProvider;
 import org.nodel.threading.ThreadPool;
 import org.nodel.threading.Timers;
@@ -55,7 +56,7 @@ public class Discovery {
     /**
      * (see public method)
      */
-    private ThreadPool _threadPool = new ThreadPool("Discovery", 24);
+    private ThreadPool _threadPool = Threads.createFencedPool("Discovery", 12);
 
     /**
      * This package's shared thread-pool

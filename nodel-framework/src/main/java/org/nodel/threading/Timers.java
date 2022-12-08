@@ -42,7 +42,7 @@ public class Timers {
         staticTimerThreads = new Timer[staticCores];
 
         for (int a = 0; a < staticCores; a++)
-            staticTimerThreads[a] = new Timer("nodel_timer_" + a, true);
+            staticTimerThreads[a] = new Timer("Ntimer" + a, true);
     } // (static)    
     
     /**

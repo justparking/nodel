@@ -6,6 +6,12 @@ package org.nodel;
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. 
  */
 
+import org.nodel.diagnostics.Diagnostics;
+import org.nodel.diagnostics.SharableMeasurementProvider;
+import org.nodel.threading.GrowingThreadPool;
+import org.nodel.threading.ThreadPool;
+import org.nodel.threading.ThreadPoolFence;
+
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -224,7 +230,11 @@ public class Threads {
         } // (method)           
 
     } // (class)
-    
+
+    private static final SharableMeasurementProvider s_counter_ShortCreated = Diagnostics.shared().registerSharableCounter("N Threading.Short thread creations", true);
+
+    private static final SharableMeasurementProvider s_counter_ShortAlive = Diagnostics.shared().registerSharableCounter("N Threading.Short threads alive", false);
+
     /**
      * An executor that uses fresh threads each time.
      */
@@ -232,9 +242,22 @@ public class Threads {
 
         @Override
         public void handle(Runnable runnable) {
-            Thread thread = new Thread(runnable);
-            thread.setName(String.format("nodeloneoff_%d", s_threadNumber.getAndIncrement()));
+            Thread thread = new Thread(new Runnable() {
+
+                @Override
+                public void run() {
+                    s_counter_ShortCreated.incr();
+                    try {
+                        runnable.run();
+                    } finally {
+                        s_counter_ShortCreated.decr();
+                    }
+                }
+
+            });
+            thread.setName(String.format("Nshort%d", s_threadNumber.getAndIncrement()));
             thread.setDaemon(true);
+            s_counter_ShortCreated.incr();
             thread.start();
         }
         
@@ -319,5 +342,70 @@ public class Threads {
 
         return op;
     } // (method)
+
+    private static final SharableMeasurementProvider s_counter_LongCreated = Diagnostics.shared().registerSharableCounter("N Threading.Long thread creations", true);
+
+    private static final SharableMeasurementProvider s_counter_LongAlive = Diagnostics.shared().registerSharableCounter("N Threading.Long threads alive", false);
+
+    /**
+     * Creates a long-living daemon thread with instrumentation
+     */
+    public static Thread createLongThread(String name, Runnable runnable) {
+        Thread thread = new Thread(new Runnable() {
+
+            @Override
+            public void run() {
+                s_counter_LongAlive.incr();
+                try {
+                    runnable.run();
+                } finally {
+                    s_counter_LongAlive.decr();
+                }
+            }
+
+        }, name) {
+
+            @Override
+            public void start() {
+                s_counter_LongCreated.incr();
+                super.start();
+            }
+
+        };
+        thread.setDaemon(true);
+        return thread;
+    }
+
+    /**
+     * Have a cap so to avoid runaway thread creation.
+     */
+    private final static int DEFAULT_MAXTHREADS = 1024;
+
+    /**
+     * General work workers for short-lived tasks.
+     */
+    public static GrowingThreadPool workerPool() {
+        return WorkersSingleton.INSTANCE;
+    }
+
+    private static final class WorkersSingleton {
+        private static final GrowingThreadPool INSTANCE = new GrowingThreadPool("N Threading Workers", DEFAULT_MAXTHREADS);
+    }
+
+    /**
+     * Background thread-pool for low-priority tasks, concurrency bound by CPU-count
+     */
+    public static ThreadPool backgroundPool() {
+        return BackgroundSingleton.INSTANCE;
+    }
+
+    private static final class BackgroundSingleton {
+        private static final ThreadPoolFence INSTANCE = new ThreadPoolFence("Background workers", Runtime.getRuntime().availableProcessors(), WorkersSingleton.INSTANCE);
+    }
+
+    public static ThreadPool createFencedPool(String name, int cap) {
+        return new ThreadPoolFence(name, cap, WorkersSingleton.INSTANCE);
+    }
+
 
 } // (class)

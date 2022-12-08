@@ -138,8 +138,8 @@ public class QuickProcess implements Closeable {
     /**
      * Constructs a new quick process.
      */
-    public QuickProcess(H0 threadStateHandler, ThreadPool threadPool, Timers timers, H1<Exception> callbackExceptionHandler,  BaseDynamicNode parentNode,
-            List<String> command, String stdinPush, H1<Integer> onStarted, H1<FinishedArg> onFinished, long timeout, String working, boolean mergeErr, Map<String, String> env) {
+    public QuickProcess(H0 threadStateHandler, ThreadPool threadPool, Timers timers, H1<Exception> callbackExceptionHandler, BaseDynamicNode parentNode,
+                        List<String> command, String stdinPush, H1<Integer> onStarted, H1<FinishedArg> onFinished, long timeout, String working, boolean mergeErr, Map<String, String> env) {
         
         // validate command list
         if (command == null || command.size() < 1 || Strings.isBlank(command.get(0)))

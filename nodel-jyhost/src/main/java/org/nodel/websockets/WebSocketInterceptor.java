@@ -7,13 +7,13 @@ import org.nanohttpd.protocols.websockets.WebSocket;
 import org.nanohttpd.protocols.websockets.WebSocketFrame;
 import org.nodel.Handler;
 import org.nodel.SimpleName;
+import org.nodel.Threads;
 import org.nodel.host.BaseNode;
 import org.nodel.host.LogEntry;
 import org.nodel.io.UnexpectedIOException;
 import org.nodel.reflection.Serialisation;
-import org.nodel.threading.ThreadPool;
+import org.nodel.threading.*;
 import org.nodel.threading.TimerTask;
-import org.nodel.threading.Timers;
 
 import java.io.IOException;
 import java.util.*;
@@ -31,7 +31,7 @@ public class WebSocketInterceptor extends Interceptor {
      */
     private static Map<WebSocket, SessionEntry> _sessions = new HashMap<WebSocket, SessionEntry>();
 
-    private static ThreadPool s_threadPool = new ThreadPool("Nodel WebSocket interceptor", 128);
+    private static ThreadPool s_threadPool = Threads.createFencedPool("Nodel WebSocket interceptor", 16);
 
 
     public WebSocketInterceptor() {

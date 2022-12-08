@@ -27,10 +27,7 @@ import org.nodel.diagnostics.SharableMeasurementProvider;
 import org.nodel.host.BaseNode;
 import org.nodel.io.BufferBuilder;
 import org.nodel.io.Stream;
-import org.nodel.threading.CallbackQueue;
-import org.nodel.threading.ThreadPool;
-import org.nodel.threading.TimerTask;
-import org.nodel.threading.Timers;
+import org.nodel.threading.*;
 import org.nodel.toolkit.windows.ProcessSandboxExecutable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -322,7 +319,7 @@ public class ManagedProcess implements Closeable {
         _timerThread = timers;
         
         // set up the connect and receive thread
-        _thread = new Thread(new Runnable() {
+        _thread = Threads.createLongThread("Nproc" + node.getName().getReducedName(), new Runnable() {
 
             @Override
             public void run() {
@@ -330,9 +327,7 @@ public class ManagedProcess implements Closeable {
             }
             
         });
-        _thread.setName(node.getName().getReducedName() + "_processLaunchAndReceive_" + _instance);
-        _thread.setDaemon(true);
-        
+
         // register the counters
         String counterName = "'" + node.getName().getReducedName() + "'";
         _counterLaunches = Diagnostics.shared().registerSharableCounter(counterName + ".Process launches", true);
@@ -792,7 +787,7 @@ public class ManagedProcess implements Closeable {
             BufferedInputStream biserr = new BufferedInputStream(new CountableInputStream(stderr, SharableMeasurementProvider.Null.INSTANCE, _counterStderrRate), 1024);
 
             // this is ugly, but a new thread has to be started otherwise polling has to be done
-            Thread thread = new Thread(new StderrHandler(biserr), _parentNode.getName().getReducedName() + "_stderr");
+            Thread thread = Threads.createLongThread("Nprocerr" + _parentNode.getName().getReducedName(), new StderrHandler(biserr));
             thread.start();
 
             // (thread will gracefully stop after its associated process dies)

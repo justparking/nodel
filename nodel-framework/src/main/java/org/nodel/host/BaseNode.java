@@ -39,6 +39,7 @@ import org.nodel.reflection.Schema;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
+import org.nodel.threading.GrowingThreadPool;
 import org.nodel.threading.ThreadPool;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
@@ -49,12 +50,7 @@ public abstract class BaseNode implements Closeable {
     /**
      * (threading)
      */
-    protected static ThreadPool s_threadPool = new ThreadPool("Dynamic nodes", 32);
-    
-    /**
-     * (threading)
-     */
-    protected static Timers s_timerThread = new Timers("Dynamic nodes");    
+    protected static Timers s_timerThread = new Timers("N Node maintenance");
     
     /**
      * The repository of all base nodes created

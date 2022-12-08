@@ -23,10 +23,7 @@ import org.nodel.diagnostics.SharableMeasurementProvider;
 import org.nodel.host.BaseNode;
 import org.nodel.io.Stream;
 import org.nodel.io.UTF8Charset;
-import org.nodel.threading.CallbackQueue;
-import org.nodel.threading.ThreadPool;
-import org.nodel.threading.TimerTask;
-import org.nodel.threading.Timers;
+import org.nodel.threading.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -240,7 +237,7 @@ public class ManagedUDP implements Closeable {
         _timerThread = timers;
         
         // set up the connect and receive thread
-        _thread = new Thread(new Runnable() {
+        _thread = Threads.createLongThread("Nudp" + node.getName().getReducedName(), new Runnable() {
 
             @Override
             public void run() {
@@ -248,9 +245,7 @@ public class ManagedUDP implements Closeable {
             }
             
         });
-        _thread.setName(node.getName().getReducedName() + "_udpBindAndListen_" + _instance);
-        _thread.setDaemon(true);
-        
+
         // register the counters
         String counterName = "'" + node.getName().getReducedName() + "'";
         _counterRecvOps = Diagnostics.shared().registerSharableCounter(counterName + ".UDP receives", true);
