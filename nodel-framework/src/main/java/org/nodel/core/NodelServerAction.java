@@ -21,6 +21,7 @@ import org.nodel.reflection.Param;
 import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
 import org.nodel.threading.CallbackQueue;
+import org.nodel.threading.ThreadPool;
 
 public class NodelServerAction implements Closeable {
     
@@ -64,6 +65,11 @@ public class NodelServerAction implements Closeable {
     }
 
     protected NodelPoint _actionPoint;
+
+    /**
+     * To match threading of wild environment.
+     */
+    private ThreadPool _threadPool;
 
     /**
      * To match threading of wild environment.
@@ -126,7 +132,8 @@ public class NodelServerAction implements Closeable {
     /**
      * Sets fields which control the threading environment.
      */
-    public void setThreadingEnvironment(CallbackQueue callbackQueue, Handler.H0 threadStateHandler, Handler.H1<Exception> exceptionHandler) {
+    public void setThreadingEnvironment(ThreadPool threadPool, CallbackQueue callbackQueue, Handler.H0 threadStateHandler, Handler.H1<Exception> exceptionHandler) {
+        _threadPool = threadPool;
         _callbackQueue = callbackQueue;
         _threadStateHandler = threadStateHandler;
         _exceptionHandler = exceptionHandler;
@@ -263,7 +270,6 @@ public class NodelServerAction implements Closeable {
         @Override
         public void handleActionRequest(Object arg) {
             if (_callFilter != null) {
-                // arg = _emitFilter.handle(arg);
                 if (_callbackQueue != null) {
                     try {
                         arg = _callbackQueue.handle(_callFilter, arg);
@@ -296,7 +302,7 @@ public class NodelServerAction implements Closeable {
             
             // if there are some handlers, use the Channel Client thread-pool (treat as though remote events)
             if (handlers != null) {
-                ChannelClient.getThreadPool().execute(new Runnable() {
+                _threadPool.execute(new Runnable() {
                     
                     @Override
                     public void run() {

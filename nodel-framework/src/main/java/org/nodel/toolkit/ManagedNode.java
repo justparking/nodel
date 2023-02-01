@@ -17,6 +17,7 @@ import org.nodel.host.Binding;
 import org.nodel.host.LogEntry;
 import org.nodel.reflection.Serialisation;
 import org.nodel.threading.CallbackQueue;
+import org.nodel.threading.ThreadPool;
 
 public class ManagedNode extends BaseNode {
     
@@ -29,6 +30,11 @@ public class ManagedNode extends BaseNode {
      * Matches the threading environment.
      */
     private H0 _threadStateHandler;
+
+    /**
+     * Matches the threading environment.
+     */
+    private ThreadPool _threadPool;
 
     /**
      * Matches the threading environment.
@@ -61,9 +67,10 @@ public class ManagedNode extends BaseNode {
 
     };    
     
-    public ManagedNode(SimpleName name, CallbackQueue callbackQueue, Handler.H0 threadStateHandler) {
+    public ManagedNode(SimpleName name, ThreadPool threadPool, CallbackQueue callbackQueue, Handler.H0 threadStateHandler) {
         super(name);
-        
+
+        _threadPool = threadPool;
         _callbackQueue = callbackQueue;
         _threadStateHandler = threadStateHandler;
     }
@@ -117,7 +124,7 @@ public class ManagedNode extends BaseNode {
                 throw new IllegalStateException("Node is closed.");
 
             final NodelServerEvent event = new NodelServerEvent(_name, new SimpleName(Nodel.reduce(eventName)), metadata);
-            event.setThreadingEnvironment(_callbackQueue, _threadStateHandler, _emitExceptionHandler);
+            event.setThreadingEnvironment(_threadPool, _callbackQueue, _threadStateHandler, _emitExceptionHandler);
             event.attachMonitor(new Handler.H2<DateTime, Object>() {
                 
                 @Override

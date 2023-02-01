@@ -996,7 +996,7 @@ public class PyNode extends BaseDynamicNode {
             // (Nodel layer)
             //String title, String desc, String group, String caution, Map<String, Object> argSchema
             NodelServerAction serverAction = new NodelServerAction(_name.getOriginalName(), entry.getKey().getReducedName(), binding);
-            serverAction.setThreadingEnvironment(_callbackQueue, _threadStateHandler, _emitExceptionHandler);
+            serverAction.setThreadingEnvironment(super.getThreadPool(), _callbackQueue, _threadStateHandler, _emitExceptionHandler);
             serverAction.registerAction(new ActionRequestHandler() {
 
                 @Override
@@ -1097,7 +1097,7 @@ public class PyNode extends BaseDynamicNode {
             Binding binding = eventBinding.getValue();
             
             NodelServerEvent nodelServerEvent = new NodelServerEvent(_name.getOriginalName(), eventBinding.getKey().getReducedName(), binding, true);
-            nodelServerEvent.setThreadingEnvironment(_callbackQueue, _threadStateHandler, _emitExceptionHandler);
+            nodelServerEvent.setThreadingEnvironment(getThreadPool(), _callbackQueue, _threadStateHandler, _emitExceptionHandler);
             nodelServerEvent.attachMonitor(new Handler.H2<DateTime, Object>() {
 
                 @Override
@@ -1257,7 +1257,7 @@ public class PyNode extends BaseDynamicNode {
 
             final NodelClientEvent nodelClientEvent = new NodelClientEvent(alias, new SimpleName(nodeName), new SimpleName(eventName));
             
-            nodelClientEvent.setThreadingEnvironment(_callbackQueue, _threadStateHandler, _emitExceptionHandler);
+            nodelClientEvent.setThreadingEnvironment(getThreadPool(), _callbackQueue, _threadStateHandler, _emitExceptionHandler);
             
             nodelClientEvent.setHandler(new NodelEventHandler() {
                 

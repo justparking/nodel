@@ -639,7 +639,7 @@ public class ManagedToolkit {
             if (_closed)
                 throw new IllegalStateException("Node is closed.");
 
-            ManagedNode node = new ManagedNode(new SimpleName(name), _callbackQueue, _threadStateHandler);
+            ManagedNode node = new ManagedNode(new SimpleName(name), _threadPool, _callbackQueue, _threadStateHandler);
 
             _managedNodes.add(node);
 
@@ -658,7 +658,7 @@ public class ManagedToolkit {
             if (_closed)
                 throw new IllegalStateException("Node is closed.");
 
-            ManagedNode node = new ManagedNode(new SimpleName(Nodel.reduce(_node.getName().getOriginalName(), true) + " " + suffix), _callbackQueue, _threadStateHandler);
+            ManagedNode node = new ManagedNode(new SimpleName(Nodel.reduce(_node.getName().getOriginalName(), true) + " " + suffix), _threadPool, _callbackQueue, _threadStateHandler);
 
             _managedNodes.add(node);
 
@@ -744,7 +744,7 @@ public class ManagedToolkit {
                 throw new IllegalStateException("Node is closed.");
 
             NodelServerEvent event = new NodelServerEvent(_node.getName(), new SimpleName(Nodel.reduce(eventName)), metadata);
-            event.setThreadingEnvironment(_callbackQueue, _threadStateHandler, _emitExceptionHandler);
+            event.setThreadingEnvironment(_threadPool, _callbackQueue, _threadStateHandler, _emitExceptionHandler);
             _node.injectLocalEvent(event);
 
             return event;
@@ -863,7 +863,7 @@ public class ManagedToolkit {
                 metadata.title = eventName;
 
             final NodelClientEvent clientEvent = new NodelClientEvent(new SimpleName(eventName), metadata, null, null);
-            clientEvent.setThreadingEnvironment(_callbackQueue, _threadStateHandler, _emitExceptionHandler);
+            clientEvent.setThreadingEnvironment(_threadPool, _callbackQueue, _threadStateHandler, _emitExceptionHandler);
             
             clientEvent.setHandler(new NodelEventHandler() {
                 

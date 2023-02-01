@@ -37,13 +37,6 @@ public abstract class ChannelClient {
     
     protected static ThreadPool s_threadPool = Threads.createFencedPool("Nodel channel-clients", 128);
 
-    /**
-     * Returns the static thread-pool for in use by Channel Client related classes
-     */
-    public static ThreadPool getThreadPool() {
-        return s_threadPool;
-    }
-
     protected static Timers s_timerThread = new Timers("Nodel channel-clients");
 
     /**

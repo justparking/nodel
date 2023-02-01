@@ -17,7 +17,10 @@ import org.nodel.host.Binding;
 import org.nodel.reflection.Objects;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Value;
-import org.nodel.threading.*;
+import org.nodel.threading.CallbackQueue;
+import org.nodel.threading.ThreadPool;
+import org.nodel.threading.TimerTask;
+import org.nodel.threading.Timers;
 
 public class NodelClientEvent {
 
@@ -37,6 +40,11 @@ public class NodelClientEvent {
      * To match threading of wild environment.
      */
     private CallbackQueue _callbackQueue;
+
+    /**
+     * To match threading of wild environment.
+     */
+    private ThreadPool _threadPool;
 
     /**
      * Released or not.
@@ -72,7 +80,7 @@ public class NodelClientEvent {
      * The handler call-back.
      * (will never be null after 'setHandler' is used)
      */
-    protected NodelEventHandler _handler;
+    private NodelEventHandler _handler;
 
     /**
      * When binding state changes, the first handler considered "safe", second and subsequent "wild".
@@ -269,7 +277,8 @@ public class NodelClientEvent {
     /**
      * Sets the fields which control the threading context
      */
-    public void setThreadingEnvironment(CallbackQueue callbackQueue, Handler.H0 threadStateHandler, Handler.H1<Exception> exceptionHandler) {
+    public void setThreadingEnvironment(ThreadPool threadPool, CallbackQueue callbackQueue, Handler.H0 threadStateHandler, Handler.H1<Exception> exceptionHandler) {
+        _threadPool = threadPool;
         _callbackQueue = callbackQueue;
         _threadStateHandler = threadStateHandler;
         _exceptionHandler = exceptionHandler;
@@ -312,6 +321,25 @@ public class NodelClientEvent {
 
         NodelClients.instance().registerEventInterest(this);
     }
+
+    /**
+     * An event arrives via this framework and MUST be dealt with asynchronously
+     */
+    void handleEvent(SimpleName node, SimpleName point, Object arg) {
+        _threadPool.execute(new Runnable() {
+
+            @Override
+            public void run() {
+                try {
+                    _handler.handleEvent(node, point, arg);
+                } catch (Exception exc) {
+                    // let the thread-pool exception handler deal with it
+                    throw new RuntimeException("Event handler", exc);
+                }
+            }
+
+        });
+    } // (method)
 
     /**
      * Handles a persist request via background timer or if overridden by the user.
@@ -369,7 +397,7 @@ public class NodelClientEvent {
 
         // treat the others as "wild"
         if (handlers.size() > 1) {
-            ChannelClient.getThreadPool().execute(new Runnable() {
+            _threadPool.execute(new Runnable() {
 
                 @Override
                 public void run() {

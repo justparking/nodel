@@ -99,7 +99,13 @@ public class NodelServerEvent implements Closeable {
     public Map<String, Object> getFullSchema() {
         return _fullSchema;
     }
-    
+
+
+    /**
+     * To match threading of wild environment.
+     */
+    private ThreadPool _threadPool;
+
     /**
      * To match threading of wild environment.
      */
@@ -168,7 +174,8 @@ public class NodelServerEvent implements Closeable {
     /**
      * Sets fields which control the threading environment.
      */
-    public void setThreadingEnvironment(CallbackQueue callbackQueue, Handler.H0 threadStateHandler, Handler.H1<Exception> exceptionHandler) {
+    public void setThreadingEnvironment(ThreadPool threadPool, CallbackQueue callbackQueue, Handler.H0 threadStateHandler, Handler.H1<Exception> exceptionHandler) {
+        _threadPool = threadPool;
         _callbackQueue = callbackQueue;
         _threadStateHandler = threadStateHandler;
         _exceptionHandler = exceptionHandler;
@@ -339,7 +346,7 @@ public class NodelServerEvent implements Closeable {
         
         // if there are some handlers, use the Channel Client thread-pool (treat as though remote events)
         if (handlers.size() > 0) {
-            ChannelClient.getThreadPool().execute(new Runnable() {
+            _threadPool.execute(new Runnable() {
 
                 @Override
                 public void run() {

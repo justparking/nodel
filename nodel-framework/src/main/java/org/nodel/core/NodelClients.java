@@ -62,15 +62,11 @@ public class NodelClients {
     private Logger _logger = LoggerFactory.getLogger(String.format("%s", this.getClass().getName()));
     
     /**
+     * Maintenance, low risk
      * (threading)
      */
-    private ThreadPool _threadPool = Threads.createFencedPool("Nodel client", 128);
-    
-    /**
-     * Thread pool for the handlers themselves.
-     */
-    private ThreadPool _threadPoolHandlers = Threads.createFencedPool("Nodel client handlers", 256);
-    
+    private final ThreadPool _threadPool = Threads.createFencedPool("_Nodel clients maintenance", 64);
+
     /**
      * (threading)
      */
@@ -725,29 +721,15 @@ public class NodelClients {
     /**
      * Handles events generated from the channel.
      */
-    private void handleChannelEvent(final NodeEntry.EventHandlerEntry eventHandlerEntry, final Object arg) {
+    private void handleChannelEvent(final NodeEntry.EventHandlerEntry eventHandlerEntry, Object arg) {
         _logger.info("Received channel event {}", eventHandlerEntry.eventPoint);
         
         synchronized (_signal) {
             // go through all the registered handlers
             for (final NodelClientEvent handler : eventHandlerEntry.bindings) {
-
-                // handlers may time take to return so needs to be threaded and invoked
-                // by thread pool for external handlers
-                _threadPoolHandlers.execute(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        try {
-                            handler._handler.handleEvent(eventHandlerEntry.eventPoint.getNode(), eventHandlerEntry.eventPoint.getPoint(), arg);
-                        } catch (Exception exc) {
-                            // a handler did not take care of an exception
-                            _logger.info("An event handler did not take care of an exception; ignoring. Exception was '{}'", exc);
-                        }
-                    }
-
-                });
-            } // (for)
+                // will be executed using their threadpool async so as to not jam up framework
+                handler.handleEvent(eventHandlerEntry.eventPoint.getNode(), eventHandlerEntry.eventPoint.getPoint(), arg);
+            }
         }
     } // (method)
 

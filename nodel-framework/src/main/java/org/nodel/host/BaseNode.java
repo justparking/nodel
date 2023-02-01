@@ -39,8 +39,6 @@ import org.nodel.reflection.Schema;
 import org.nodel.reflection.Serialisation;
 import org.nodel.reflection.Service;
 import org.nodel.reflection.Value;
-import org.nodel.threading.GrowingThreadPool;
-import org.nodel.threading.ThreadPool;
 import org.nodel.threading.Timers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
