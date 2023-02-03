@@ -325,13 +325,13 @@ public class PyNode extends BaseDynamicNode {
     };
 
     /**
-     * Provides context
+     * Provides context for emit or call handlers
      */
-    private H1<Exception> _emitExceptionHandler = new H1<Exception>() {
+    private H1<Exception> _attachedExceptionHandlers = new H1<Exception>() {
 
         @Override
         public void handle(Exception value) {
-            Handler.tryHandle(_exceptionHandler, "Emitter", value);
+            Handler.tryHandle(_exceptionHandler, "attached handlers", value);
         }
 
     };
@@ -996,7 +996,7 @@ public class PyNode extends BaseDynamicNode {
             // (Nodel layer)
             //String title, String desc, String group, String caution, Map<String, Object> argSchema
             NodelServerAction serverAction = new NodelServerAction(_name.getOriginalName(), entry.getKey().getReducedName(), binding);
-            serverAction.setThreadingEnvironment(super.getThreadPool(), _callbackQueue, _threadStateHandler, _emitExceptionHandler);
+            serverAction.setThreadingEnvironment(super.getThreadPool(), _callbackQueue, _threadStateHandler, _attachedExceptionHandlers);
             serverAction.registerAction(new ActionRequestHandler() {
 
                 @Override
@@ -1097,7 +1097,7 @@ public class PyNode extends BaseDynamicNode {
             Binding binding = eventBinding.getValue();
             
             NodelServerEvent nodelServerEvent = new NodelServerEvent(_name.getOriginalName(), eventBinding.getKey().getReducedName(), binding, true);
-            nodelServerEvent.setThreadingEnvironment(getThreadPool(), _callbackQueue, _threadStateHandler, _emitExceptionHandler);
+            nodelServerEvent.setThreadingEnvironment(getThreadPool(), _callbackQueue, _threadStateHandler, _attachedExceptionHandlers);
             nodelServerEvent.attachMonitor(new Handler.H2<DateTime, Object>() {
 
                 @Override
@@ -1257,7 +1257,7 @@ public class PyNode extends BaseDynamicNode {
 
             final NodelClientEvent nodelClientEvent = new NodelClientEvent(alias, new SimpleName(nodeName), new SimpleName(eventName));
             
-            nodelClientEvent.setThreadingEnvironment(getThreadPool(), _callbackQueue, _threadStateHandler, _emitExceptionHandler);
+            nodelClientEvent.setThreadingEnvironment(getThreadPool(), _callbackQueue, _threadStateHandler, _attachedExceptionHandlers);
             
             nodelClientEvent.setHandler(new NodelEventHandler() {
                 

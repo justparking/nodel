@@ -81,6 +81,7 @@ public class ManagedNode extends BaseNode {
                 throw new IllegalStateException("Node is closed.");
             
             final NodelServerAction action = new NodelServerAction(_name, new SimpleName(Nodel.reduce(actionName)), metadata);
+            action.setThreadingEnvironment(_threadPool, _callbackQueue, _threadStateHandler, _emitExceptionHandler);
             action.registerAction(new ActionRequestHandler() {
 
                 @Override

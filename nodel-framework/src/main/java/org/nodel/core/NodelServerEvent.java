@@ -309,7 +309,6 @@ public class NodelServerEvent implements Closeable {
         DateTime now = DateTime.now();
         
         if (_emitFilter != null) {
-            // arg = _emitFilter.handle(arg);
             if (_callbackQueue != null) {
                 try {
                     arg = _callbackQueue.handle(_emitFilter, arg);
@@ -344,9 +343,10 @@ public class NodelServerEvent implements Closeable {
         
         final Object finalArg = arg;
         
-        // if there are some handlers, use the Channel Client thread-pool (treat as though remote events)
+        // if there are some handlers, run on this thread use the Channel Client thread-pool (treat as though remote events)
         if (handlers.size() > 0) {
-            _threadPool.execute(new Runnable() {
+
+            final Runnable handler = new Runnable() {
 
                 @Override
                 public void run() {
@@ -375,7 +375,11 @@ public class NodelServerEvent implements Closeable {
                     }
                 }
 
-            });
+            };
+            if (_threadPool != null)
+                _threadPool.execute(handler);
+            else
+                handler.run();
         }
     }
     

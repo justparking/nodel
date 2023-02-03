@@ -694,6 +694,7 @@ public class ManagedToolkit {
                 throw new IllegalStateException("Node is closed.");
             
             final NodelServerAction action = new NodelServerAction(_node.getName(), new SimpleName(Nodel.reduce(actionName)), metadata);
+            action.setThreadingEnvironment(_threadPool, _callbackQueue, _threadStateHandler, _emitExceptionHandler);
             action.registerAction(new ActionRequestHandler() {
 
                 @Override

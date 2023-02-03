@@ -282,7 +282,7 @@ public class NodelServerAction implements Closeable {
                     try {
                         arg = _callFilter.handle(arg);
                     } catch (Exception exc) {
-                        throw new RuntimeException("Emit filter", exc);
+                        throw new RuntimeException("Call filter", exc);
                     }
                 }
             }
@@ -302,16 +302,16 @@ public class NodelServerAction implements Closeable {
             
             // if there are some handlers, use the Channel Client thread-pool (treat as though remote events)
             if (handlers != null) {
-                _threadPool.execute(new Runnable() {
-                    
+                Runnable handler = new Runnable() {
+
                     @Override
                     public void run() {
                         // set up thread state
                         if (_threadStateHandler != null)
                             _threadStateHandler.handle();
-                        
+
                         Exception lastExc = null;
-                        
+
                         // call handlers one after the other
                         for (Handler.H1<Object> handler : handlers) {
                             if (_callbackQueue != null)
@@ -324,14 +324,18 @@ public class NodelServerAction implements Closeable {
                                 }
                             }
                         } // (for)
-                        
+
                         if (lastExc != null) {
                             // let the thread-pool exception handler deal with it
                             throw new RuntimeException("Action call handler", lastExc);
                         }
                     }
-                    
-                });
+
+                };
+                if (_threadPool == null)
+                    _threadPool.execute(handler);
+                else
+                    handler.run();
             }
         }
         
@@ -385,7 +389,7 @@ public class NodelServerAction implements Closeable {
     }
     
     /**
-     * Filtering the arg emitted 
+     * Filtering the arg called
      */
     public void addCallFilter(Handler.F1<Object, Object> filter) {
         _callFilter = filter;
